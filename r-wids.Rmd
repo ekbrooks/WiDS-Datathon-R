@@ -1,0 +1,27 @@
+---
+title: "r-wids-datathon"
+author: "Emma Brooks"
+date: "2023-09-27"
+output: html_document
+---
+
+```{r load-package, include=FALSE}
+library(tidyverse)
+library(skimr)
+```
+
+
+```{r load-data}
+train <- read_csv("data/train.csv")
+```
+```{r summary}
+ncol(train)
+nrow(train)
+colnames(train)
+skim(train)
+```
+
+```{r}
+
+```
+
