@@ -21,7 +21,10 @@ colnames(train)
 skim(train)
 ```
 
-```{r}
-
+```{r split, eval=FALSE}
+#set.seed()
+#inTrain <- createDataPartition(y = train$ddd, p=0.7, list=FALSE)
+#training <- train[inTrain,]
+#testing <- train[-inTrain,]
 ```
 
