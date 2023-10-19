@@ -19,12 +19,65 @@ ncol(train)
 nrow(train)
 colnames(train)
 skim(train)
+
 ```
+```{r glimpse}
+glimpse(train)
+```
+```{r}
+train %>%
+  na.omit() %>%
+  summarize(across(everything(), min))
+
+train %>%
+  na.omit() %>%
+  summarize(across(everything(), max))
+
+train %>%
+  select(patient_age) %>%
+  arrange((patient_age))
+
+train %>%
+  count(patient_gender)
+```
+
 
 ```{r split, eval=FALSE}
 #set.seed()
-#inTrain <- createDataPartition(y = train$ddd, p=0.7, list=FALSE)
+#inTrain <- createDataPartition(y = train$treatment_pd, p=0.7, list=FALSE)
 #training <- train[inTrain,]
 #testing <- train[-inTrain,]
+```
+
+```{r scatter}
+# patient age
+ggplot(data = train, mapping = aes(x = patient_age, y = treatment_pd)) +
+           geom_point()
+
+# median income household for zip code
+ggplot(data = train, mapping = aes(x = income_household_median, y = treatment_pd)) +
+           geom_point()
+
+# population for zip code
+ggplot(data = train, mapping = aes(x = population, y = treatment_pd)) +
+           geom_point()
+
+# median age for zip code
+ggplot(data = train, mapping = aes(x = age_median, y = treatment_pd)) +
+           geom_point()
+
+# unemployement rate for zip code
+ggplot(data = train, mapping = aes(x = unemployment_rate, y = treatment_pd)) +
+           geom_point()
+
+# patient age for zip code 
+ggplot(data = train, mapping = aes(x = patient_age, y = treatment_pd)) +
+           geom_point()
+
+
+```
+
+```{r}
+
 ```
 
