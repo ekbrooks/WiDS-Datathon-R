@@ -8,70 +8,138 @@ output: html_document
 ```{r load-package, include=FALSE}
 library(tidyverse)
 library(skimr)
+library(caret)
+library(mdsr)
 ```
 
 
 ```{r load-data}
 train <- read_csv("data/train.csv")
 ```
-```{r summary}
+```{r summary, eval=FALSE}
 ncol(train)
 nrow(train)
 colnames(train)
 skim(train)
 
 ```
-```{r glimpse}
-glimpse(train)
+
+```{r set-seed}
+set.seed(3911)
+inTrain <- createDataPartition(y = train$treatment_pd, p=0.7, list=FALSE)
+training <- train[inTrain,]
+testing <- train[-inTrain,]
 ```
+
+```{r glimpse}
+glimpse(training)
+
+ncol(training)
+nrow(training)
+colnames(training)
+skim(training)
+
+# Rows = 19373
+```
+
 ```{r}
-train %>%
+training %>%
   na.omit() %>%
   summarize(across(everything(), min))
 
-train %>%
+training %>%
   na.omit() %>%
   summarize(across(everything(), max))
 
-train %>%
+training %>%
   select(patient_age) %>%
   arrange((patient_age))
 
-train %>%
+training %>%
   count(patient_gender)
+
+training %>%
+  count(patient_state) %>%
+  arrange(desc(n))
+
+training %>% 
+  select(metastatic_first_novel_treatment) %>%
+  summary(NA) # 13243 NA's
+
+training %>%
+  count(metastatic_first_novel_treatment)
+
+training %>% 
+  select(metastatic_first_novel_treatment_type) %>%
+  summary(NA)
+training %>%
+  count(metastatic_first_novel_treatment_type)
+
+training %>% 
+  select(bmi) %>%
+  summary(NA)
+
+training %>%
+  count(bmi)
+
+training %>% 
+  select(patient_race) %>%
+  summary(NA)
+
+training %>%
+  count(patient_race)
+
+training %>% 
+  select(metastatic_first_novel_treatment_type) %>%
+  summary(NA)
+
+training %>%
+  count(metastatic_first_treatment_type)
+
+training %>%
+  count(breast_cancer_diagnosis_desc) %>%
+  arrange(desc(n))
+```
+
+```{r, eval=FALSE}
+training %>%
+  select(breast_cancer_diagnosis_desc) %>%
+  str_split("\r\n") %>%
+  pluck(1)
+
 ```
 
 
-```{r split, eval=FALSE}
-#set.seed()
-#inTrain <- createDataPartition(y = train$treatment_pd, p=0.7, list=FALSE)
-#training <- train[inTrain,]
-#testing <- train[-inTrain,]
+```{r eval=FALSE}
+training %>%
+  select(breast_cancer_diagnosis_desc) %>%
+  str_subset("male")
 ```
+
 
 ```{r scatter}
 # patient age
-ggplot(data = train, mapping = aes(x = patient_age, y = treatment_pd)) +
+ggplot(data = training, mapping = aes(x = patient_age, y = treatment_pd)) +
            geom_point()
 
 # median income household for zip code
-ggplot(data = train, mapping = aes(x = income_household_median, y = treatment_pd)) +
+ggplot(data = training, mapping = aes(x = income_household_median, y = treatment_pd)) +
            geom_point()
 
 # population for zip code
-ggplot(data = train, mapping = aes(x = population, y = treatment_pd)) +
+ggplot(data = training, mapping = aes(x = population, y = treatment_pd)) +
            geom_point()
 
 # median age for zip code
-ggplot(data = train, mapping = aes(x = age_median, y = treatment_pd)) +
+ggplot(data = training, mapping = aes(x = age_median, y = treatment_pd)) +
            geom_point()
 
 # unemployement rate for zip code
-ggplot(data = train, mapping = aes(x = unemployment_rate, y = treatment_pd)) +
+ggplot(data = training, mapping = aes(x = unemployment_rate, y = treatment_pd)) +
            geom_point()
 
 # patient age for zip code 
-ggplot(data = train, mapping = aes(x = patient_age, y = treatment_pd)) +
+ggplot(data = training, mapping = aes(x = patient_age, y = treatment_pd)) +
            geom_point()
 
 
