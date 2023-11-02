@@ -110,10 +110,26 @@ training %>%
 ```
 
 
-```{r eval=FALSE}
-training %>%
-  select(breast_cancer_diagnosis_desc) %>%
-  str_subset("male")
+```{r finding-left}
+finding_side <- training %>%
+  select(breast_cancer_diagnosis_desc)
+
+finding_side <- deframe(finding_side)
+
+left_side <- str_extract(finding_side, "left")
+
+enframe(left_side)
+```
+```{r finding-right}
+right_side <- str_extract(finding_side, "right")
+
+enframe(right_side)
+```
+
+```{r finding-unspecified}
+unspecified_side <- str_extract(finding_side, "unspecified")
+
+enframe(unspecified_side)
 ```
 
 
