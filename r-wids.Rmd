@@ -132,6 +132,106 @@ unspecified_side <- str_extract(finding_side, "unspecified")
 enframe(unspecified_side)
 ```
 
+```{r response-dist}
+# treatment pd -- very right skewed
+training %>%
+  ggplot(mapping = aes(x = treatment_pd)) +
+          geom_boxplot()
+
+training %>%
+  filter(treatment_pd < 500) %>%
+  ggplot(mapping = aes(x = treatment_pd)) +
+          geom_boxplot()
+```
+
+
+```{r distributions}
+# payer type
+training %>%
+  ggplot(mapping = aes(x = payer_type)) +
+          geom_bar()
+
+# region
+training %>%
+  ggplot(mapping = aes(x = region)) +
+          geom_bar()
+
+# divisiom
+training %>%
+  ggplot(mapping = aes(y = division)) +
+          geom_bar()
+
+# farmer -- very right skewed
+training %>%
+  ggplot(mapping = aes(x = farmer)) +
+          geom_boxplot()
+
+# patient age -- pretty normal
+training %>%
+  ggplot(mapping = aes(x = patient_age)) +
+          geom_boxplot()
+
+# density -- very right skewed
+training %>%
+  filter(density <= 10000) %>%
+  ggplot(mapping = aes(x = density)) +
+          geom_boxplot()
+
+# female -- normal
+training %>%
+  ggplot(mapping = aes(x = female)) +
+          geom_boxplot()
+
+# health uninsured -- little right skewed
+training %>%
+  ggplot(mapping = aes(x = health_uninsured)) +
+          geom_boxplot()
+
+# race white -- little left skewed
+training %>%
+  ggplot(mapping = aes(x = race_white)) +
+          geom_boxplot()
+
+# limited english -- right skewed
+training %>%
+  filter(limited_english < 40) %>%
+  ggplot(mapping = aes(x = limited_english)) +
+          geom_boxplot()
+
+```
+```{r income-distributions}
+# income household median
+training %>%
+  ggplot(mapping = aes(x = income_household_median)) +
+          geom_boxplot()
+
+# home ownership -- left skewed
+training %>%
+  ggplot(mapping = aes(x = home_ownership)) +
+          geom_boxplot()
+
+# rent burden -- somewhat normal, a little right skewed
+training %>%
+  filter(rent_burden < 70) %>%
+  ggplot(mapping = aes(x = rent_burden)) +
+          geom_boxplot()
+
+# education high school -- normal
+training %>%
+  ggplot(mapping = aes(x = education_highschool)) +
+          geom_boxplot()
+
+# unemployment rate -- right skewed
+training %>%
+  ggplot(mapping = aes(x = unemployment_rate)) +
+          geom_boxplot()
+
+# poverty -- right skewed
+training %>%
+  ggplot(mapping = aes(x = poverty)) +
+          geom_boxplot()
+```
+
 
 ```{r scatter}
 # patient age
