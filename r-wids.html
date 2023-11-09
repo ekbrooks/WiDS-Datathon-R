@@ -1603,10 +1603,20 @@ testing &lt;- train[-inTrain,]</code></pre>
 ##  9 Malig neoplasm of upper-inner quadrant of left female breast   545
 ## 10 Malig neoplm of upper-inner quadrant of right female breast    520
 ## # ℹ 46 more rows</code></pre>
+<pre class="r"><code># removed metastatic novel treatment variables
+training &lt;- training %&gt;%
+  mutate(metastatic_first_novel_treatment = NULL,
+         metastatic_first_novel_treatment_type = NULL)</code></pre>
 <pre class="r"><code>training %&gt;%
-  select(breast_cancer_diagnosis_desc) %&gt;%
-  str_split(&quot;\r\n&quot;) %&gt;%
-  pluck(1)</code></pre>
+  count(breast_cancer_diagnosis_code) %&gt;%
+  arrange(desc(n))
+
+training %&gt;%
+  count(metastatic_cancer_diagnosis_code) %&gt;%
+  arrange(desc(n))
+
+training %&gt;%
+  count(metastatic_first_treatment) </code></pre>
 <pre class="r"><code>finding_side &lt;- training %&gt;%
   select(breast_cancer_diagnosis_desc)
 
@@ -1614,55 +1624,28 @@ finding_side &lt;- deframe(finding_side)
 
 left_side &lt;- str_extract(finding_side, &quot;left&quot;)
 
-enframe(left_side)</code></pre>
-<pre><code>## # A tibble: 19,373 × 2
-##     name value
-##    &lt;int&gt; &lt;chr&gt;
-##  1     1 &lt;NA&gt; 
-##  2     2 left 
-##  3     3 &lt;NA&gt; 
-##  4     4 &lt;NA&gt; 
-##  5     5 &lt;NA&gt; 
-##  6     6 left 
-##  7     7 left 
-##  8     8 &lt;NA&gt; 
-##  9     9 &lt;NA&gt; 
-## 10    10 &lt;NA&gt; 
-## # ℹ 19,363 more rows</code></pre>
-<pre class="r"><code>right_side &lt;- str_extract(finding_side, &quot;right&quot;)
+any &lt;- str_extract(finding_side, &quot;left&quot;)
 
-enframe(right_side)</code></pre>
-<pre><code>## # A tibble: 19,373 × 2
-##     name value
-##    &lt;int&gt; &lt;chr&gt;
-##  1     1 right
-##  2     2 &lt;NA&gt; 
-##  3     3 &lt;NA&gt; 
-##  4     4 right
-##  5     5 &lt;NA&gt; 
-##  6     6 &lt;NA&gt; 
-##  7     7 &lt;NA&gt; 
-##  8     8 right
-##  9     9 right
-## 10    10 &lt;NA&gt; 
-## # ℹ 19,363 more rows</code></pre>
-<pre class="r"><code>unspecified_side &lt;- str_extract(finding_side, &quot;unspecified&quot;)
+enframe(left_side)
+
+right_side &lt;- str_extract(finding_side, &quot;right&quot;)
+
+enframe(right_side)
+
+unspecified_side &lt;- str_extract(finding_side, &quot;unspecified&quot;)
 
 enframe(unspecified_side)</code></pre>
-<pre><code>## # A tibble: 19,373 × 2
-##     name value      
-##    &lt;int&gt; &lt;chr&gt;      
-##  1     1 &lt;NA&gt;       
-##  2     2 &lt;NA&gt;       
-##  3     3 unspecified
-##  4     4 &lt;NA&gt;       
-##  5     5 &lt;NA&gt;       
-##  6     6 &lt;NA&gt;       
-##  7     7 unspecified
-##  8     8 &lt;NA&gt;       
-##  9     9 &lt;NA&gt;       
-## 10    10 unspecified
-## # ℹ 19,363 more rows</code></pre>
+<pre class="r"><code>finding_side &lt;- training %&gt;%
+  select(breast_cancer_diagnosis_desc)
+
+finding_side &lt;- deframe(finding_side)
+
+training &lt;- training %&gt;%
+  mutate(breast_cancer_diagnosis_side = case_when(
+    str_detect(finding_side, &quot;left&quot;) ~ &quot;left&quot;,
+    str_detect(finding_side, &quot;right&quot;) ~ &quot;right&quot;,
+    TRUE ~ &quot;unspecified&quot;
+  ))</code></pre>
 <pre class="r"><code># treatment pd -- very right skewed
 training %&gt;%
   ggplot(mapping = aes(x = treatment_pd)) +

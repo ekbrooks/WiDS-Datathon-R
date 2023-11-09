@@ -100,17 +100,29 @@ training %>%
   count(breast_cancer_diagnosis_desc) %>%
   arrange(desc(n))
 ```
-
-```{r, eval=FALSE}
-training %>%
-  select(breast_cancer_diagnosis_desc) %>%
-  str_split("\r\n") %>%
-  pluck(1)
-
+```{r remove-cols}
+# removed metastatic novel treatment variables
+training <- training %>%
+  mutate(metastatic_first_novel_treatment = NULL,
+         metastatic_first_novel_treatment_type = NULL)
 ```
 
 
-```{r finding-left}
+```{r, eval=FALSE}
+training %>%
+  count(breast_cancer_diagnosis_code) %>%
+  arrange(desc(n))
+
+training %>%
+  count(metastatic_cancer_diagnosis_code) %>%
+  arrange(desc(n))
+
+training %>%
+  count(metastatic_first_treatment) 
+```
+
+
+```{r finding-left, eval=FALSE}
 finding_side <- training %>%
   select(breast_cancer_diagnosis_desc)
 
@@ -118,19 +130,33 @@ finding_side <- deframe(finding_side)
 
 left_side <- str_extract(finding_side, "left")
 
+any <- str_extract(finding_side, "left")
+
 enframe(left_side)
-```
-```{r finding-right}
+
 right_side <- str_extract(finding_side, "right")
 
 enframe(right_side)
-```
 
-```{r finding-unspecified}
 unspecified_side <- str_extract(finding_side, "unspecified")
 
 enframe(unspecified_side)
 ```
+
+```{r}
+finding_side <- training %>%
+  select(breast_cancer_diagnosis_desc)
+
+finding_side <- deframe(finding_side)
+
+training <- training %>%
+  mutate(breast_cancer_diagnosis_side = case_when(
+    str_detect(finding_side, "left") ~ "left",
+    str_detect(finding_side, "right") ~ "right",
+    TRUE ~ "unspecified"
+  ))
+```
+
 
 ```{r response-dist}
 # treatment pd -- very right skewed
