@@ -42,7 +42,7 @@ skim(training)
 # Rows = 19373
 ```
 
-```{r}
+```{r count}
 training %>%
   na.omit() %>%
   summarize(across(everything(), min))
@@ -143,7 +143,7 @@ unspecified_side <- str_extract(finding_side, "unspecified")
 enframe(unspecified_side)
 ```
 
-```{r}
+```{r side-variable}
 finding_side <- training %>%
   select(breast_cancer_diagnosis_desc)
 
@@ -155,6 +155,32 @@ training <- training %>%
     str_detect(finding_side, "right") ~ "right",
     TRUE ~ "unspecified"
   ))
+```
+
+```{r clean-drug-var}
+training %>%
+  count(metastatic_first_treatment)
+
+training <- training %>%
+  mutate(metastatic_first_treatment = case_when(
+    metastatic_first_treatment == "DOCETAXEL ANHYDROUS" ~ "DOCETAXEL",
+    
+    metastatic_first_treatment == "DOXORUBICIN HCL LIPOSOMAL" ~ "DOXORUBICIN HYDROCHLORIDE",
+    metastatic_first_treatment == "DOXORUBICIN HCL" ~ "DOXORUBICIN HYDROCHLORIDE",
+    
+    metastatic_first_treatment == "EPIRUBICIN HCL" ~ "EPIRUBICIN HYDROCHLORIDE",
+    
+    metastatic_first_treatment == "GEMCITABINE HCL" ~ "GEMCITABINE HYDROCHLORIDE",
+    
+    metastatic_first_treatment == "METHOTREXATE" ~ "METHOTREXATE SODIUM",
+    
+    metastatic_first_treatment == "PACLITAXEL PROTEIN BOUND PARTICLES" ~ "PACLITAXEL",
+    
+    metastatic_first_treatment == "PEMETREXED DISODIUM HEPTAHYDRATE" ~ "PEMETREXED DISODIUM",
+    
+    .default = metastatic_first_treatment
+  ))
+
 ```
 
 
