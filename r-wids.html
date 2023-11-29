@@ -1646,6 +1646,41 @@ training &lt;- training %&gt;%
     str_detect(finding_side, &quot;right&quot;) ~ &quot;right&quot;,
     TRUE ~ &quot;unspecified&quot;
   ))</code></pre>
+<pre class="r"><code>training %&gt;%
+  count(metastatic_first_treatment)</code></pre>
+<pre><code>## # A tibble: 37 × 2
+##    metastatic_first_treatment     n
+##    &lt;chr&gt;                      &lt;int&gt;
+##  1 BEVACIZUMAB                  154
+##  2 BLEOMYCIN SULFATE              1
+##  3 CAPECITABINE                1121
+##  4 CARBOPLATIN                 3158
+##  5 CISPLATIN                     78
+##  6 CYCLOPHOSPHAMIDE            2920
+##  7 DOCETAXEL                    817
+##  8 DOCETAXEL ANHYDROUS           83
+##  9 DOXORUBICIN HCL             6895
+## 10 DOXORUBICIN HCL LIPOSOMAL    123
+## # ℹ 27 more rows</code></pre>
+<pre class="r"><code>training &lt;- training %&gt;%
+  mutate(metastatic_first_treatment = case_when(
+    metastatic_first_treatment == &quot;DOCETAXEL ANHYDROUS&quot; ~ &quot;DOCETAXEL&quot;,
+    
+    metastatic_first_treatment == &quot;DOXORUBICIN HCL LIPOSOMAL&quot; ~ &quot;DOXORUBICIN HYDROCHLORIDE&quot;,
+    metastatic_first_treatment == &quot;DOXORUBICIN HCL&quot; ~ &quot;DOXORUBICIN HYDROCHLORIDE&quot;,
+    
+    metastatic_first_treatment == &quot;EPIRUBICIN HCL&quot; ~ &quot;EPIRUBICIN HYDROCHLORIDE&quot;,
+    
+    metastatic_first_treatment == &quot;GEMCITABINE HCL&quot; ~ &quot;GEMCITABINE HYDROCHLORIDE&quot;,
+    
+    metastatic_first_treatment == &quot;METHOTREXATE&quot; ~ &quot;METHOTREXATE SODIUM&quot;,
+    
+    metastatic_first_treatment == &quot;PACLITAXEL PROTEIN BOUND PARTICLES&quot; ~ &quot;PACLITAXEL&quot;,
+    
+    metastatic_first_treatment == &quot;PEMETREXED DISODIUM HEPTAHYDRATE&quot; ~ &quot;PEMETREXED DISODIUM&quot;,
+    
+    .default = metastatic_first_treatment
+  ))</code></pre>
 <pre class="r"><code># treatment pd -- very right skewed
 training %&gt;%
   ggplot(mapping = aes(x = treatment_pd)) +

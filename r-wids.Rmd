@@ -42,7 +42,14 @@ skim(training)
 # Rows = 19373
 ```
 
-```{r count}
+```{r}
+training %>%
+  select(everything()) %>%
+  summarise_all(funs(sum(is.na(.))))
+```
+
+
+```{r count, eval=FALSE}
 training %>%
   na.omit() %>%
   summarize(across(everything(), min))
@@ -99,16 +106,30 @@ training %>%
 training %>%
   count(breast_cancer_diagnosis_desc) %>%
   arrange(desc(n))
+
+training %>%
+  count(metastatic_cancer_diagnosis_code)
 ```
+ 
 ```{r remove-cols}
-# removed metastatic novel treatment variables
+# removed variables with too many missing values
 training <- training %>%
   mutate(metastatic_first_novel_treatment = NULL,
-         metastatic_first_novel_treatment_type = NULL)
+         metastatic_first_novel_treatment_type = NULL,
+         patient_race = NULL,
+         payer_type = NULL,
+         bmi = NULL,
+         metastatic_first_treatment_type = NULL,
+         self_employed = NULL,
+         farmer = NULL)
+
+# remove identifier variables
+training <- training %>%
+  mutate(patient_id = NULL)
 ```
 
 
-```{r, eval=FALSE}
+```{r count2, eval=FALSE}
 training %>%
   count(breast_cancer_diagnosis_code) %>%
   arrange(desc(n))
@@ -181,6 +202,24 @@ training <- training %>%
     .default = metastatic_first_treatment
   ))
 
+```
+
+```{r body-system}
+training <- training %>%
+  mutate(metastatic_cancer_body_system = case_when(
+    metastatic_cancer_diagnosis_code %in% c("C770", "C771", "C772", "C773", "C774", "C775", "C778", "C779") ~ "lymphatic",
+    metastatic_cancer_diagnosis_code %in% c("C7800", "C7801", "C7802", "C781", "C782", "C7839") ~ "respiratory",
+    metastatic_cancer_diagnosis_code %in% c("C784", "C785", "C786", "C787", "C7889") ~ "digestive",
+    metastatic_cancer_diagnosis_code %in% c("C7900", "C7901", "C7902", "C7910") ~ "urinary",
+    metastatic_cancer_diagnosis_code %in% c("C792", "C7931", "C7932", "C7940", "C7949") ~ "nervous",
+    metastatic_cancer_diagnosis_code %in% c("C7951", "C7952") ~ "skeletal",
+    metastatic_cancer_diagnosis_code %in% c("C7960", "C7961", "C7962", "C7981", "C7982") ~ "reproductive",
+    metastatic_cancer_diagnosis_code %in% c("C7970", "C7971", "C7972") ~ "adrenal glands",
+    metastatic_cancer_diagnosis_code %in% c("C7989", "C799") ~ "other",
+  ))
+
+training %>%
+  count(metastatic_cancer_body_system) 
 ```
 
 
