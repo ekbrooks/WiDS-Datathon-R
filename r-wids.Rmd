@@ -10,6 +10,7 @@ library(tidyverse)
 library(skimr)
 library(caret)
 library(mdsr)
+library(GGally)
 ```
 
 
@@ -176,6 +177,12 @@ training <- training %>%
     str_detect(finding_side, "right") ~ "right",
     TRUE ~ "unspecified"
   ))
+
+training %>%
+  count(breast_cancer_diagnosis_side)
+# left = 7394
+# right = 7167
+# unspecified = 4812
 ```
 
 ```{r clean-drug-var}
@@ -237,10 +244,6 @@ training %>%
 
 
 ```{r distributions}
-# payer type
-training %>%
-  ggplot(mapping = aes(x = payer_type)) +
-          geom_bar()
 
 # region
 training %>%
@@ -252,10 +255,6 @@ training %>%
   ggplot(mapping = aes(y = division)) +
           geom_bar()
 
-# farmer -- very right skewed
-training %>%
-  ggplot(mapping = aes(x = farmer)) +
-          geom_boxplot()
 
 # patient age -- pretty normal
 training %>%
@@ -324,35 +323,106 @@ training %>%
 ```
 
 
-```{r scatter}
+```{r scatter-treatment-region}
+# colored by region
+
 # patient age
-ggplot(data = training, mapping = aes(x = patient_age, y = treatment_pd)) +
+ggplot(data = training, mapping = aes(x = patient_age, y = treatment_pd, color=region)) +
            geom_point()
 
 # median income household for zip code
-ggplot(data = training, mapping = aes(x = income_household_median, y = treatment_pd)) +
+# more south in lower income median
+ggplot(data = training, mapping = aes(x = income_household_median, y = treatment_pd, color=region)) +
            geom_point()
 
 # population for zip code
-ggplot(data = training, mapping = aes(x = population, y = treatment_pd)) +
+# outliers are in northeast, more midwest in lower population 
+ggplot(data = training, mapping = aes(x = population, y = treatment_pd, color=region)) +
            geom_point()
 
 # median age for zip code
-ggplot(data = training, mapping = aes(x = age_median, y = treatment_pd)) +
+ggplot(data = training, mapping = aes(x = age_median, y = treatment_pd, color=region)) +
            geom_point()
 
 # unemployement rate for zip code
-ggplot(data = training, mapping = aes(x = unemployment_rate, y = treatment_pd)) +
+# 
+ggplot(data = training, mapping = aes(x = unemployment_rate, y = treatment_pd, color=region)) +
            geom_point()
 
 # patient age for zip code 
-ggplot(data = training, mapping = aes(x = patient_age, y = treatment_pd)) +
+ggplot(data = training, mapping = aes(x = patient_age, y = treatment_pd, color=region)) +
+           geom_point()
+```
+
+```{r scatter-treatment-breast-side}
+# all of them -- unspecified more with higher treatment period
+
+# patient age
+ggplot(data = training, mapping = aes(x = patient_age, y = treatment_pd, color= breast_cancer_diagnosis_side)) +
            geom_point()
 
+# median income household for zip code
+ggplot(data = training, mapping = aes(x = income_household_median, y = treatment_pd, color= breast_cancer_diagnosis_side)) +
+           geom_point()
+
+# population for zip code
+ggplot(data = training, mapping = aes(x = population, y = treatment_pd, color= breast_cancer_diagnosis_side)) +
+           geom_point()
+
+# median age for zip code
+ggplot(data = training, mapping = aes(x = age_median, y = treatment_pd, color= breast_cancer_diagnosis_side)) +
+           geom_point()
+
+# unemployement rate for zip code
+ggplot(data = training, mapping = aes(x = unemployment_rate, y = treatment_pd, color= breast_cancer_diagnosis_side)) +
+           geom_point()
+
+# patient age for zip code 
+ggplot(data = training, mapping = aes(x = patient_age, y = treatment_pd, color= breast_cancer_diagnosis_side)) +
+           geom_point()
 
 ```
 
-```{r}
+```{r scatter-treatment-body-system}
+# all -- lymphatic areas are more around shorter treatment periods
 
+# patient age
+ggplot(data = training, mapping = aes(x = patient_age, y = treatment_pd, color= metastatic_cancer_body_system)) +
+           geom_point()
+
+# median income household for zip code
+ggplot(data = training, mapping = aes(x = income_household_median, y = treatment_pd, color= metastatic_cancer_body_system)) +
+           geom_point()
+
+# population for zip code
+ggplot(data = training, mapping = aes(x = population, y = treatment_pd, color= metastatic_cancer_body_system)) +
+           geom_point()
+
+# median age for zip code
+ggplot(data = training, mapping = aes(x = age_median, y = treatment_pd, color= metastatic_cancer_body_system)) +
+           geom_point()
+
+# unemployement rate for zip code
+ggplot(data = training, mapping = aes(x = unemployment_rate, y = treatment_pd, color= metastatic_cancer_body_system)) +
+           geom_point()
+
+# patient age for zip code 
+ggplot(data = training, mapping = aes(x = patient_age, y = treatment_pd, color= metastatic_cancer_body_system)) +
+           geom_point()
+```
+
+
+
+```{r side-box}
+training %>%
+  filter(treatment_pd < 1000) %>%
+  ggplot(mapping = aes(y = metastatic_cancer_body_system, x = treatment_pd)) +
+  geom_boxplot()
+```
+
+```{r colinearity, eval=FALSE}
+training %>% 
+  select() %>%
+  ggpairs()
 ```
 
