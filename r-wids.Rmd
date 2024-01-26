@@ -123,10 +123,6 @@ training <- training %>%
          metastatic_first_treatment_type = NULL,
          self_employed = NULL,
          farmer = NULL)
-
-# remove identifier variables
-training <- training %>%
-  mutate(patient_id = NULL)
 ```
 
 
@@ -228,6 +224,27 @@ training <- training %>%
 training %>%
   count(metastatic_cancer_body_system) 
 ```
+```{r impute-attempt1}
+library(mice)
+imputeData <- training %>%
+  select(treatment_pd, family_size, family_dual_income, income_household_median, income_household_under_5, income_household_5_to_10, income_household_10_to_15, income_household_15_to_20, income_household_20_to_25, income_household_25_to_35, income_household_35_to_50,
+         income_household_50_to_75, income_household_75_to_100, income_household_100_to_150, income_household_150_over, income_household_six_figure,
+         home_ownership, home_value, rent_median, rent_burden) 
+md.pattern(imputeData)
+```
+```{r impute-attempt2}
+library(VIM)
+aggr_plot <- aggr(imputeData, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(imputeData), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+```
+```{r impute-attempt3}
+tempImputeData <- mice(imputeData, m=5, meth='pmm', seed=500)
+summary(tempImputeData)
+```
+```{r impute-attempt4}
+completeImputed <- complete(tempImputeData)
+sapply(completeImputed, function(x) sum(is.na(x)))
+```
+
 
 
 ```{r response-dist}
