@@ -224,7 +224,9 @@ training <- training %>%
 training %>%
   count(metastatic_cancer_body_system) 
 ```
-```{r impute-attempt1}
+
+
+```{r impute-attempt1, eval=FALSE}
 library(mice)
 imputeData <- training %>%
   select(treatment_pd, family_size, family_dual_income, income_household_median, income_household_under_5, income_household_5_to_10, income_household_10_to_15, income_household_15_to_20, income_household_20_to_25, income_household_25_to_35, income_household_35_to_50,
@@ -232,15 +234,18 @@ imputeData <- training %>%
          home_ownership, home_value, rent_median, rent_burden) 
 md.pattern(imputeData)
 ```
-```{r impute-attempt2}
+
+```{r impute-attempt2, eval=FALSE}
 library(VIM)
 aggr_plot <- aggr(imputeData, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(imputeData), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
 ```
-```{r impute-attempt3}
+
+```{r impute-attempt3, eval=FALSE}
 tempImputeData <- mice(imputeData, m=5, meth='pmm', seed=500)
 summary(tempImputeData)
 ```
-```{r impute-attempt4}
+
+```{r impute-attempt4, eval=FALSE}
 completeImputed <- complete(tempImputeData)
 sapply(completeImputed, function(x) sum(is.na(x)))
 ```
@@ -255,6 +260,13 @@ training %>%
 
 training %>%
   filter(treatment_pd < 500) %>%
+  ggplot(mapping = aes(x = treatment_pd)) +
+          geom_boxplot() +
+          labs(x = "Treatment Period (days)",
+               title = "Distribution of Period Between Diagnosis and Treatment")
+
+training %>%
+  filter(treatment_pd < 200) %>%
   ggplot(mapping = aes(x = treatment_pd)) +
           geom_boxplot()
 ```
@@ -276,7 +288,9 @@ training %>%
 # patient age -- pretty normal
 training %>%
   ggplot(mapping = aes(x = patient_age)) +
-          geom_boxplot()
+          geom_boxplot() +
+          labs(x = "Age (Years)",
+               title = "Distribution of Patient Age")
 
 # density -- very right skewed
 training %>%
@@ -305,6 +319,25 @@ training %>%
   ggplot(mapping = aes(x = limited_english)) +
           geom_boxplot()
 
+# metastatic cancer body system
+training %>%
+  ggplot(mapping = aes(x = metastatic_cancer_body_system)) +
+          geom_bar() +
+          labs(x = "Body System",
+               title = "Distribution of Body System with Metastatic Cancer")
+
+# metastatic first treatment
+training %>%
+  count(metastatic_first_treatment) %>%
+  filter(n > 1000)
+training %>%
+  select(metastatic_first_treatment) %>%
+  filter(metastatic_first_treatment %in% c('CAPECITABINE','CARBOPLATIN','CYCLOPHOSPHAMIDE','DOXORUBICIN HYDROCHLORIDE', 'PACLITAXEL'))%>% 
+  ggplot(mapping = aes(x = metastatic_first_treatment)) +
+          geom_bar() +
+          labs(x = "Treatment Drug",
+               y = "Number of Patients",
+               title = "Top 5 Metastatic Cancer Treatment Drugs")
 ```
 ```{r income-distributions}
 # income household median
@@ -434,7 +467,13 @@ ggplot(data = training, mapping = aes(x = patient_age, y = treatment_pd, color= 
 training %>%
   filter(treatment_pd < 1000) %>%
   ggplot(mapping = aes(y = metastatic_cancer_body_system, x = treatment_pd)) +
-  geom_boxplot()
+  geom_boxplot() 
+
+training %>%
+  select(metastatic_first_treatment, treatment_pd) %>%
+  filter(metastatic_first_treatment %in% c('CAPECITABINE','CARBOPLATIN','CYCLOPHOSPHAMIDE','DOXORUBICIN HYDROCHLORIDE', 'PACLITAXEL')) %>%
+  ggplot(mapping = aes(y = metastatic_first_treatment, x = treatment_pd)) +
+          geom_boxplot()
 ```
 
 ```{r colinearity, eval=FALSE}
