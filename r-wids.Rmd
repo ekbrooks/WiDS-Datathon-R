@@ -11,6 +11,9 @@ library(skimr)
 library(caret)
 library(mdsr)
 library(GGally)
+library(tree)
+library(ISLR2)
+library(randomForest)
 ```
 
 
@@ -22,7 +25,6 @@ ncol(train)
 nrow(train)
 colnames(train)
 skim(train)
-
 ```
 
 ```{r set-seed}
@@ -43,7 +45,7 @@ skim(training)
 # Rows = 19373
 ```
 
-```{r}
+```{r nas}
 training %>%
   select(everything()) %>%
   summarise_all(funs(sum(is.na(.))))
@@ -225,7 +227,6 @@ training %>%
   count(metastatic_cancer_body_system) 
 ```
 
-
 ```{r impute-attempt1, eval=FALSE}
 library(mice)
 imputeData <- training %>%
@@ -250,8 +251,7 @@ completeImputed <- complete(tempImputeData)
 sapply(completeImputed, function(x) sum(is.na(x)))
 ```
 
-
-
+## Distributions
 ```{r response-dist}
 # treatment pd -- very right skewed
 training %>%
@@ -259,21 +259,12 @@ training %>%
           geom_boxplot()
 
 training %>%
-  filter(treatment_pd < 500) %>%
-  ggplot(mapping = aes(x = treatment_pd)) +
-          geom_boxplot() +
-          labs(x = "Treatment Period (days)",
-               title = "Distribution of Period Between Diagnosis and Treatment")
-
-training %>%
   filter(treatment_pd < 200) %>%
   ggplot(mapping = aes(x = treatment_pd)) +
           geom_boxplot()
 ```
 
-
 ```{r distributions}
-
 # region
 training %>%
   ggplot(mapping = aes(x = region)) +
@@ -283,14 +274,6 @@ training %>%
 training %>%
   ggplot(mapping = aes(y = division)) +
           geom_bar()
-
-
-# patient age -- pretty normal
-training %>%
-  ggplot(mapping = aes(x = patient_age)) +
-          geom_boxplot() +
-          labs(x = "Age (Years)",
-               title = "Distribution of Patient Age")
 
 # density -- very right skewed
 training %>%
@@ -318,26 +301,6 @@ training %>%
   filter(limited_english < 40) %>%
   ggplot(mapping = aes(x = limited_english)) +
           geom_boxplot()
-
-# metastatic cancer body system
-training %>%
-  ggplot(mapping = aes(x = metastatic_cancer_body_system)) +
-          geom_bar() +
-          labs(x = "Body System",
-               title = "Distribution of Body System with Metastatic Cancer")
-
-# metastatic first treatment
-training %>%
-  count(metastatic_first_treatment) %>%
-  filter(n > 1000)
-training %>%
-  select(metastatic_first_treatment) %>%
-  filter(metastatic_first_treatment %in% c('CAPECITABINE','CARBOPLATIN','CYCLOPHOSPHAMIDE','DOXORUBICIN HYDROCHLORIDE', 'PACLITAXEL'))%>% 
-  ggplot(mapping = aes(x = metastatic_first_treatment)) +
-          geom_bar() +
-          labs(x = "Treatment Drug",
-               y = "Number of Patients",
-               title = "Top 5 Metastatic Cancer Treatment Drugs")
 ```
 ```{r income-distributions}
 # income household median
@@ -372,8 +335,8 @@ training %>%
           geom_boxplot()
 ```
 
-
-```{r scatter-treatment-region}
+## Scatterplots
+```{r scatter-treatment-region, eval=FALSE}
 # colored by region
 
 # patient age
@@ -404,7 +367,7 @@ ggplot(data = training, mapping = aes(x = patient_age, y = treatment_pd, color=r
            geom_point()
 ```
 
-```{r scatter-treatment-breast-side}
+```{r scatter-treatment-breast-side, eval = FALSE}
 # all of them -- unspecified more with higher treatment period
 
 # patient age
@@ -433,7 +396,7 @@ ggplot(data = training, mapping = aes(x = patient_age, y = treatment_pd, color= 
 
 ```
 
-```{r scatter-treatment-body-system}
+```{r scatter-treatment-body-system, eval=FALSE}
 # all -- lymphatic areas are more around shorter treatment periods
 
 # patient age
@@ -458,27 +421,83 @@ ggplot(data = training, mapping = aes(x = unemployment_rate, y = treatment_pd, c
 
 # patient age for zip code 
 ggplot(data = training, mapping = aes(x = patient_age, y = treatment_pd, color= metastatic_cancer_body_system)) +
-           geom_point()
+           geom_point(alpha = 0.4)
 ```
 
-
-
-```{r side-box}
+## Final Visualizations
+```{r final-viz}
+# patient age -- pretty normal
 training %>%
-  filter(treatment_pd < 1000) %>%
-  ggplot(mapping = aes(y = metastatic_cancer_body_system, x = treatment_pd)) +
-  geom_boxplot() 
+  ggplot(mapping = aes(x = patient_age)) +
+          geom_boxplot() +
+          labs(x = "Age (Years)",
+               title = "Distribution of Patient Age")
 
+# treatment pd distribution -- filtered
+training %>%
+  filter(treatment_pd < 500) %>%
+  ggplot(mapping = aes(x = treatment_pd)) +
+          geom_boxplot() +
+          labs(x = "Treatment Period (days)",
+               title = "Distribution of Period Between Diagnosis and Treatment",
+               subtitle = "For less than 500 days")
+
+# metastatic cancer body system
+training %>%
+  ggplot(mapping = aes(x = metastatic_cancer_body_system)) +
+          geom_bar() +
+          labs(x = "Body System",
+               title = "Distribution of Body System with Metastatic Cancer")
+
+# metastatic first treatment bar chart -- top 5
+training %>%
+  count(metastatic_first_treatment) %>%
+  filter(n > 1000)
+training %>%
+  select(metastatic_first_treatment) %>%
+  filter(metastatic_first_treatment %in% c('CAPECITABINE','CARBOPLATIN','CYCLOPHOSPHAMIDE','DOXORUBICIN HYDROCHLORIDE', 'PACLITAXEL'))%>% 
+  ggplot(mapping = aes(x = metastatic_first_treatment)) +
+          geom_bar() +
+          labs(x = "Treatment Drug",
+               y = "Number of Patients",
+               title = "Top 5 Metastatic Cancer Treatment Drugs")
+
+# top 5 treatment by treatment pd
 training %>%
   select(metastatic_first_treatment, treatment_pd) %>%
   filter(metastatic_first_treatment %in% c('CAPECITABINE','CARBOPLATIN','CYCLOPHOSPHAMIDE','DOXORUBICIN HYDROCHLORIDE', 'PACLITAXEL')) %>%
   ggplot(mapping = aes(y = metastatic_first_treatment, x = treatment_pd)) +
-          geom_boxplot()
+          geom_boxplot() +
+          labs(x = "Treatment Period (days)",
+               y = "Treatment Drug",
+               title = "Distribution of Treatment Period by Metastatic Cancer First Treatment Drug")
+
+# body system by treatment pd -- filtered
+training %>%
+  filter(treatment_pd < 1000) %>%
+  ggplot(mapping = aes(y = metastatic_cancer_body_system, x = treatment_pd)) +
+  geom_boxplot() +
+  labs(x = "Treatment Period (days)",
+       y = "Body System",
+       title = "Distribution of Treatment Period by Metastatic Body System",
+       subtitle = "For Less than 1000 days")
 ```
 
 ```{r colinearity, eval=FALSE}
 training %>% 
   select() %>%
   ggpairs()
+
+```
+
+```{r tree, eval=FALSE}
+# tree.treatment <- tree(medv ~ ., )
+summary(tree.treatment)
+plot(tree.treatment)
+text(tree.treatment, pretty = 0)
+```
+
+```{r forest, eval=FALSE}
+
 ```
 
