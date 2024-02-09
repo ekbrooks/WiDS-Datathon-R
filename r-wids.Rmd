@@ -14,6 +14,9 @@ library(GGally)
 library(tree)
 library(ISLR2)
 library(randomForest)
+library(recipes)
+library(visdat)
+
 ```
 
 
@@ -32,6 +35,7 @@ set.seed(3911)
 inTrain <- createDataPartition(y = train$treatment_pd, p=0.7, list=FALSE)
 training <- train[inTrain,]
 testing <- train[-inTrain,]
+training_recipe <- recipe(treatment_pd ~., data = training)
 ```
 
 ```{r glimpse}
@@ -49,6 +53,31 @@ skim(training)
 training %>%
   select(everything()) %>%
   summarise_all(funs(sum(is.na(.))))
+
+is.na(training)
+
+# missing heat map
+training %>%
+  is.na() %>%
+  reshape2::melt() %>%
+  ggplot(aes(Var2, Var1, fill=value)) +
+    geom_raster() +
+  coord_flip() +
+  scale_y_continuous(NULL, expand = c(0,0)) +
+  scale_fill_grey(name = "",
+                  labels = c("present",
+                             "missing")) +
+  xlab("observation") +
+  theme(axis.text.y = element_text(size=4))
+
+# missing visualization
+vis_miss(training, cluster = TRUE, warn_large_data = FALSE)
+```
+
+```{r zero-variance-variables}
+caret::nearZeroVar(training, saveMetrics = TRUE) %>%
+  tibble::rownames_to_column() %>%
+  filter(nzv)
 ```
 
 
@@ -112,6 +141,10 @@ training %>%
 
 training %>%
   count(metastatic_cancer_diagnosis_code)
+
+training %>%
+  count(breast_cancer_diagnosis_year) %>%
+  arrange(desc(n))
 ```
  
 ```{r remove-cols}
@@ -124,7 +157,10 @@ training <- training %>%
          bmi = NULL,
          metastatic_first_treatment_type = NULL,
          self_employed = NULL,
-         farmer = NULL)
+         farmer = NULL,
+         patient_gender = NULL)
+
+## removed breast_cancer_dagnosis_code , breast_cancer_diagnosis_desc , metastatic_cancer_daignosis_code later
 ```
 
 
@@ -181,6 +217,11 @@ training %>%
 # left = 7394
 # right = 7167
 # unspecified = 4812
+
+# done with column, remove
+training <- training %>%
+  mutate(breast_cancer_diagnosis_desc = NULL,
+         breast_cancer_diagnosis_code = NULL)
 ```
 
 ```{r clean-drug-var}
@@ -225,6 +266,10 @@ training <- training %>%
 
 training %>%
   count(metastatic_cancer_body_system) 
+
+# done with column, remove
+training <- training %>%
+  mutate(metastatic_cancer_diagnosis_code = NULL)
 ```
 
 ```{r impute-attempt1, eval=FALSE}
@@ -251,6 +296,13 @@ completeImputed <- complete(tempImputeData)
 sapply(completeImputed, function(x) sum(is.na(x)))
 ```
 
+```{r, eval=FALSE}
+training %>%
+  select(treatment_pd, .) %>%
+  ggpairs()
+```
+
+
 ## Distributions
 ```{r response-dist}
 # treatment pd -- very right skewed
@@ -262,6 +314,34 @@ training %>%
   filter(treatment_pd < 200) %>%
   ggplot(mapping = aes(x = treatment_pd)) +
           geom_boxplot()
+
+# log transformation
+#log_treatment_pd <- log(training$treatment_pd)
+training <- training %>%
+  mutate(log_treatment_pd = log(treatment_pd), .keep = "all") 
+
+training %>%
+  summary(log_treatment_pd)
+
+# log boxplot
+training %>%
+  ggplot(mapping = aes(x = log_treatment_pd)) +
+          geom_boxplot() 
+
+# recipe package log
+training_recipe <- recipe(treatment_pd ~., data = training) %>%
+  step_log(all_outcomes())
+
+training_recipe
+
+```
+
+```{r normalization-standardization}
+# YeoJohnson -- note = can do this with preProc func
+training_recipe <- recipe(treatment_pd ~., data = training) %>%
+  step_YeoJohnson(all_numeric())
+  
+training_recipe
 ```
 
 ```{r distributions}
@@ -302,6 +382,7 @@ training %>%
   ggplot(mapping = aes(x = limited_english)) +
           geom_boxplot()
 ```
+
 ```{r income-distributions}
 # income household median
 training %>%
@@ -332,6 +413,10 @@ training %>%
 # poverty -- right skewed
 training %>%
   ggplot(mapping = aes(x = poverty)) +
+          geom_boxplot()
+
+training %>%
+  ggplot(mapping = aes(x = breast_cancer_diagnosis_side, y = log_treatment_pd)) +
           geom_boxplot()
 ```
 
@@ -446,8 +531,7 @@ training %>%
 training %>%
   ggplot(mapping = aes(x = metastatic_cancer_body_system)) +
           geom_bar() +
-          labs(x = "Body System",
-               title = "Distribution of Body System with Metastatic Cancer")
+          labs(x = "Body System")
 
 # metastatic first treatment bar chart -- top 5
 training %>%
@@ -464,9 +548,9 @@ training %>%
 
 # top 5 treatment by treatment pd
 training %>%
-  select(metastatic_first_treatment, treatment_pd) %>%
+  select(metastatic_first_treatment, log_treatment_pd) %>%
   filter(metastatic_first_treatment %in% c('CAPECITABINE','CARBOPLATIN','CYCLOPHOSPHAMIDE','DOXORUBICIN HYDROCHLORIDE', 'PACLITAXEL')) %>%
-  ggplot(mapping = aes(y = metastatic_first_treatment, x = treatment_pd)) +
+  ggplot(mapping = aes(y = metastatic_first_treatment, x = log_treatment_pd)) +
           geom_boxplot() +
           labs(x = "Treatment Period (days)",
                y = "Treatment Drug",
@@ -474,10 +558,10 @@ training %>%
 
 # body system by treatment pd -- filtered
 training %>%
-  filter(treatment_pd < 1000) %>%
-  ggplot(mapping = aes(y = metastatic_cancer_body_system, x = treatment_pd)) +
+  #filter(treatment_pd < 1000) %>%
+  ggplot(mapping = aes(y = metastatic_cancer_body_system, x = log_treatment_pd)) +
   geom_boxplot() +
-  labs(x = "Treatment Period (days)",
+  labs(x = " Log Treatment Period (days)",
        y = "Body System",
        title = "Distribution of Treatment Period by Metastatic Body System",
        subtitle = "For Less than 1000 days")
@@ -485,19 +569,33 @@ training %>%
 
 ```{r colinearity, eval=FALSE}
 training %>% 
-  select() %>%
+  select_all() %>%
   ggpairs()
 
 ```
 
 ```{r tree, eval=FALSE}
-# tree.treatment <- tree(medv ~ ., )
-summary(tree.treatment)
-plot(tree.treatment)
-text(tree.treatment, pretty = 0)
+# 10 fold cv by default
+training_tree <- rpart(
+  formula = treatment_pd ~.,
+  data = training,
+  preProc = c("center", "scale"),
+  method = "anova"
+)
+rpart.plot(training_tree)
+
+# caret way
+training_tree2 <- train(treatment_pd ~.,
+                        data = training,
+                        method = "rpart",
+                        metric = "rmse")
 ```
 
 ```{r forest, eval=FALSE}
-
+training_forest <- train(treatment_pd ~.,
+                         data = training,
+                         method = "rf",
+                         preProc = c("center", "scale"),
+                         metric = "rmse")
 ```
 
