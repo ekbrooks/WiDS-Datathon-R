@@ -328,6 +328,10 @@ corrplot::corrplot(cor(numeric_training))
 ```
 ```{r}
 skim(training)
+
+caret::nearZeroVar(training, saveMetrics = TRUE) %>%
+  tibble::rownames_to_column() %>%
+  filter(nzv)
 ```
 
 
@@ -345,16 +349,16 @@ training %>%
 
 # log transformation
 #log_treatment_pd <- log(training$treatment_pd)
-training <- training %>%
-  mutate(log_treatment_pd = log(treatment_pd + 0.001), .keep = "all") 
+#training <- training %>%
+#  mutate(log_treatment_pd = log(treatment_pd + 0.001), .keep = "all") 
 
-training %>%
-  summary(log_treatment_pd)
+#training %>%
+#  summary(log_treatment_pd)
 
 # log boxplot
-training %>%
-  ggplot(mapping = aes(x = log_treatment_pd)) +
-          geom_boxplot() 
+#training %>%
+#  ggplot(mapping = aes(x = log_treatment_pd)) +
+#          geom_boxplot() 
 
 # recipe package log
 training_recipe <- recipe(treatment_pd ~., data = training) %>%
@@ -602,15 +606,102 @@ training %>%
 
 ```
 
+```{r test-wrangle}
+# removed variables with too many missing values
+testing <- testing %>%
+  mutate(metastatic_first_novel_treatment = NULL,
+         metastatic_first_novel_treatment_type = NULL,
+         patient_race = NULL,
+         payer_type = NULL,
+         bmi = NULL,
+         metastatic_first_treatment_type = NULL,
+         self_employed = NULL,
+         farmer = NULL,
+         patient_gender = NULL)
+
+# breast side
+finding_side <- testing %>%
+  select(breast_cancer_diagnosis_desc)
+
+finding_side <- deframe(finding_side)
+
+testing <- testing %>%
+  mutate(breast_cancer_diagnosis_side = case_when(
+    str_detect(finding_side, "left") ~ "left",
+    str_detect(finding_side, "right") ~ "right",
+    TRUE ~ "unspecified"
+  ))
+
+# done with column, remove
+testing <- testing %>%
+  mutate(breast_cancer_diagnosis_desc = NULL,
+         breast_cancer_diagnosis_code = NULL)
+
+# drug 
+testing <- testing %>%
+  mutate(metastatic_first_treatment = case_when(
+    metastatic_first_treatment == "DOCETAXEL ANHYDROUS" ~ "DOCETAXEL",
+    
+    metastatic_first_treatment == "DOXORUBICIN HCL LIPOSOMAL" ~ "DOXORUBICIN HYDROCHLORIDE",
+    metastatic_first_treatment == "DOXORUBICIN HCL" ~ "DOXORUBICIN HYDROCHLORIDE",
+    
+    metastatic_first_treatment == "EPIRUBICIN HCL" ~ "EPIRUBICIN HYDROCHLORIDE",
+    
+    metastatic_first_treatment == "GEMCITABINE HCL" ~ "GEMCITABINE HYDROCHLORIDE",
+    
+    metastatic_first_treatment == "METHOTREXATE" ~ "METHOTREXATE SODIUM",
+    
+    metastatic_first_treatment == "PACLITAXEL PROTEIN BOUND PARTICLES" ~ "PACLITAXEL",
+    
+    metastatic_first_treatment == "PEMETREXED DISODIUM HEPTAHYDRATE" ~ "PEMETREXED DISODIUM",
+    
+    .default = metastatic_first_treatment
+  ))
+
+# body system
+testing <- testing %>%
+  mutate(metastatic_cancer_body_system = case_when(
+    metastatic_cancer_diagnosis_code %in% c("C770", "C771", "C772", "C773", "C774", "C775", "C778", "C779") ~ "lymphatic",
+    metastatic_cancer_diagnosis_code %in% c("C7800", "C7801", "C7802", "C781", "C782", "C7839") ~ "respiratory",
+    metastatic_cancer_diagnosis_code %in% c("C784", "C785", "C786", "C787", "C7889") ~ "digestive",
+    metastatic_cancer_diagnosis_code %in% c("C7900", "C7901", "C7902", "C7910") ~ "urinary",
+    metastatic_cancer_diagnosis_code %in% c("C792", "C7931", "C7932", "C7940", "C7949") ~ "nervous",
+    metastatic_cancer_diagnosis_code %in% c("C7951", "C7952") ~ "skeletal",
+    metastatic_cancer_diagnosis_code %in% c("C7960", "C7961", "C7962", "C7981", "C7982") ~ "reproductive",
+    metastatic_cancer_diagnosis_code %in% c("C7970", "C7971", "C7972") ~ "adrenal glands",
+    metastatic_cancer_diagnosis_code %in% c("C7989", "C799") ~ "other",
+  ))
+
+# done with column, remove
+testing <- testing %>%
+  mutate(metastatic_cancer_diagnosis_code = NULL)
+
+colnames(testing)
+colnames(training)
+```
+
 ```{r lin-mod, eval=FALSE}
+linear_training <- na.omit(training)
 training_lm <- train(treatment_pd ~ ., 
-                     data = training,
+                     data = linear_training,
                      method = "lm",
                      preProc = c("center", "scale", "YeoJohnson"))
 ```
 
 
 ```{r tree, eval=FALSE}
+# na's
+training <- na.omit(training)
+training <- training %>%
+  mutate(metastatic_first_treatment = NULL)
+testing <- testing %>% 
+  mutate(metastatic_first_treatment = NULL)
+training %>%
+  select(everything()) %>%
+  summarise_all(funs(sum(is.na(.))))
+
+is.na(training)
+
 # 10 fold cv by default
 training_tree <- rpart(
   formula = treatment_pd ~.,
@@ -624,7 +715,15 @@ rpart.plot(training_tree)
 training_tree2 <- train(treatment_pd ~.,
                         data = training,
                         method = "rpart",
-                        metric = "rmse")
+                        preProc = c("center", "scale", "YeoJohnson"),
+                        metric = "RMSE")
+
+pred <- predict(training_tree2, testing)
+
+# rmse
+sqrt(mean((testing$treatment_pd - pred)^2))
+
+# rmse(preds = pred, actuals = )
 ```
 
 ```{r forest, eval=FALSE}
@@ -632,7 +731,12 @@ training_forest <- train(treatment_pd ~.,
                          data = training,
                          method = "rf",
                          preProc = c("center", "scale", "YeoJohnson"),
-                         metric = "rmse")
+                         metric = "RMSE")
+
+# rmse
+pred <- predict(training_forest, testing)
+
+sqrt(mean((testing$treatment_pd - pred)^2))
 ```
 
 ```{r importance-viz, eval=FALSE}
