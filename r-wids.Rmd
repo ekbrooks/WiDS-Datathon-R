@@ -147,6 +147,28 @@ training %>%
   arrange(desc(n))
 ```
  
+```{r wrangling-func, eval=FALSE}
+wrangle <- function(data) {
+  
+  # remove variables with too many missing values
+  data <- data %>%
+  mutate(metastatic_first_novel_treatment = NULL,
+         metastatic_first_novel_treatment_type = NULL,
+         patient_race = NULL,
+         payer_type = NULL,
+         bmi = NULL,
+         metastatic_first_treatment_type = NULL,
+         self_employed = NULL,
+         farmer = NULL,
+         patient_gender = NULL)
+  
+  return(data)
+}
+
+wrangle(training)
+```
+
+ 
 ```{r remove-cols}
 # removed variables with too many missing values
 training <- training %>%
@@ -296,10 +318,16 @@ completeImputed <- complete(tempImputeData)
 sapply(completeImputed, function(x) sum(is.na(x)))
 ```
 
-```{r, eval=FALSE}
-training %>%
-  select(treatment_pd, .) %>%
-  ggpairs()
+```{r correlation-heat-map, eval=FALSE}
+numeric_training <- select_if(training, is.numeric)
+numeric_training <- numeric_training %>% mutate(patient_id = NULL,
+                           patient_zip3 = NULL,
+                           breast_cancer_diagnosis_year = NULL)
+numeric_training <- na.omit(numeric_training)
+corrplot::corrplot(cor(numeric_training))
+```
+```{r}
+skim(training)
 ```
 
 
