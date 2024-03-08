@@ -16,7 +16,8 @@ library(ISLR2)
 library(randomForest)
 library(recipes)
 library(visdat)
-
+library(workflows)
+library(parsnip)
 ```
 
 
@@ -218,8 +219,11 @@ wrangle <- function(data) {
       metastatic_cancer_diagnosis_code %in% c("C7989", "C799") ~ "other",
     ))
   
-  data <- data %>%
-    select(-metastatic_cancer_diagnosis_code)
+  #data <- data %>%
+  #  select(-metastatic_cancer_diagnosis_code)
+  
+  #data <- data %>%
+  #  mutate(log_treatment_pd = log(treatment_pd))
   
   data <- na.omit(data)
   
@@ -298,7 +302,7 @@ training %>%
           geom_boxplot()
 
 # log transformation
-#log_treatment_pd <- log(training$treatment_pd)
+# log_treatment_pd <- log(training$treatment_pd)
 #training <- training %>%
 #  mutate(log_treatment_pd = log(treatment_pd + 0.001), .keep = "all") 
 
@@ -314,16 +318,31 @@ training %>%
 
 ```{r recipe-normalization-standardization}
 # recipe package log
-training_recipe <- recipe(treatment_pd ~., data = training) %>%
-  step_log(all_outcomes())
+#training_recipe <- recipe(treatment_pd ~., data = training) %>%
+#  step_log(all_outcomes())
 
-training_recipe
+#training_recipe
 
 # YeoJohnson -- note = can do this with preProc func
 training_recipe <- recipe(treatment_pd ~., data = training) %>%
-  step_YeoJohnson(all_numeric())
+  step_nzv(all_predictors()) %>%
+  step_YeoJohnson(all_numeric_predictors()) %>%
+  step_YeoJohnson(all_outcomes()) %>%
+  step_center(all_numeric_predictors()) %>%
+  step_scale(all_numeric_predictors()) %>%
+  update_role(treatment_pd, new_role = "outcome") 
   
 training_recipe
+
+testing_recipe <- recipe(treatment_pd ~., data = testing) %>%
+  step_nzv(all_predictors()) %>%
+  step_YeoJohnson(all_numeric_predictors()) %>%
+  step_YeoJohnson(all_outcomes()) %>%
+  step_center(all_numeric_predictors()) %>%
+  step_scale(all_numeric_predictors())  %>%
+  update_role(treatment_pd, new_role = "outcome")
+
+testing_recipe
 ```
 
 ```{r distributions}
@@ -397,9 +416,9 @@ training %>%
   ggplot(mapping = aes(x = poverty)) +
           geom_boxplot()
 
-training %>%
-  ggplot(mapping = aes(x = breast_cancer_diagnosis_side, y = treatment_pd)) + # had log treatment pd here
-          geom_boxplot()
+#training %>%
+#  ggplot(mapping = aes(x = breast_cancer_diagnosis_side, y = log_treatment_pd)) + # had log treatment pd here
+#          geom_boxplot()
 ```
 
 ## Scatterplots
@@ -605,7 +624,7 @@ sqrt(mean((testing$treatment_pd - pred)^2))
 
 ```{r forest, eval=FALSE}
 
-training_forest <- train(treatment_pd ~.,
+training_forest <- train(log_treatment_pd ~.,
                          data = training,
                          method = "rf",
                          trControl = trainControl(method = "cv", number = 10),
@@ -615,10 +634,30 @@ training_forest <- train(treatment_pd ~.,
 # rmse
 pred <- predict(training_forest, testing)
 
-sqrt(mean((testing$treatment_pd - pred)^2))
+sqrt(mean((testing$log_treatment_pd - pred)^2))
 ```
 
 ```{r importance-viz, eval=FALSE}
 vip(training_tree, num_features = 40, bar = FALSE)
+```
+
+```{r recipe-forest, eval=FALSE}
+training_rec_forest <- rand_forest(
+                          mode = "regression",
+                          engine = "randomForest"
+                        )
+
+training_workflow <- 
+  workflow() %>%
+  add_model(training_rec_forest) %>%
+  add_recipe(training_recipe)
+
+training_workflow
+
+training_fit <-
+  training_workflow %>%
+  fit(data = training)
+
+predict(training_fit, new_data = testing)
 ```
 
