@@ -316,7 +316,7 @@ training %>%
 
 ```
 
-```{r recipe-normalization-standardization}
+```{r recipe-normalization-standardization, eval = FALSE}
 # recipe package log
 #training_recipe <- recipe(treatment_pd ~., data = training) %>%
 #  step_log(all_outcomes())
@@ -623,7 +623,7 @@ sqrt(mean((testing$treatment_pd - pred)^2))
 ```
 
 ```{r forest, eval=FALSE}
-
+# train function tree
 training_forest <- train(log_treatment_pd ~.,
                          data = training,
                          method = "rf",
@@ -631,10 +631,24 @@ training_forest <- train(log_treatment_pd ~.,
                          preProc = c("center", "scale", "YeoJohnson"),
                          metric = "RMSE")
 
-# rmse
+# training forest 1
 pred <- predict(training_forest, testing)
 
-sqrt(mean((testing$log_treatment_pd - pred)^2))
+
+# rand forest ranger tree
+tf_mod <- rand_forest(
+            mtry = 72,
+            trees = 720
+          )
+
+training_forest2 <- tf_mod %>%
+                    set_engine("ranger") %>%
+                    set_mode("regression") %>%
+                    fit(treatment_pd ~ ., training)
+
+pred <- predict(training_forest2, testing)
+
+sqrt(mean((testing$treatment_pd - pred$.pred)^2))
 ```
 
 ```{r importance-viz, eval=FALSE}
