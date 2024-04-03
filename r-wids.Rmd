@@ -18,6 +18,8 @@ library(recipes)
 library(visdat)
 library(workflows)
 library(parsnip)
+library(ranger)
+library(vip)
 ```
 
 
@@ -219,11 +221,11 @@ wrangle <- function(data) {
       metastatic_cancer_diagnosis_code %in% c("C7989", "C799") ~ "other",
     ))
   
-  #data <- data %>%
-  #  select(-metastatic_cancer_diagnosis_code)
+  data <- data %>%
+    select(-metastatic_cancer_diagnosis_code)
   
-  #data <- data %>%
-  #  mutate(log_treatment_pd = log(treatment_pd))
+  data <- data %>%
+    select(-metastatic_first_treatment)
   
   data <- na.omit(data)
   
@@ -236,6 +238,31 @@ testing <- wrangle(testing)
 training %>%
   select(everything()) %>%
   summarise_all(funs(sum(is.na(.))))
+```
+
+```{r lm-data}
+lm_wrangle <- function(data) {
+  
+  data <- data %>%
+    select(-c(male, never_married, age_under_10, age_10_to_19, age_20s, age_30s, age_50s, age_60s, age_70s, age_over_80,
+            income_household_median, income_household_under_5, income_household_10_to_15, income_household_15_to_20, 
+            income_household_20_to_25, income_household_25_to_35, income_household_35_to_50, income_household_50_to_75,
+            income_household_100_to_150, income_household_150_over, income_household_six_figure,
+            income_individual_median, housing_units, rent_median, education_highschool, education_bachelors, 
+            education_graduate, education_college_or_above, hispanic))
+  
+  data <- data %>%
+    mutate(log_treatment_pd = log(treatment_pd))
+    
+  data <- data %>%
+    select(-treatment_pd)
+  
+  return(data)
+}
+
+lm_training <- lm_wrangle(training)
+lm_testing <- lm_wrangle(testing)
+
 ```
 
 ```{r count2, eval=FALSE}
@@ -273,7 +300,83 @@ enframe(unspecified_side)
 ```
 
 ```{r correlation-heat-map, eval=FALSE}
-numeric_training <- select_if(training, is.numeric)
+numeric_training <- training %>% select(male, female, married, divorced, never_married, widowed, race_white, race_black)
+#numeric_training <- select_if(training, is.numeric)
+numeric_training <- numeric_training %>% mutate(patient_id = NULL,
+                           patient_zip3 = NULL,
+                           breast_cancer_diagnosis_year = NULL)
+numeric_training <- na.omit(numeric_training)
+corrplot::corrplot(cor(numeric_training))
+
+# highly correlated variables 
+# married, never married -- -1
+# married, race black -- ~-0.6
+# never married, race white -- ~0.7
+
+
+# get rid of 
+# male
+# never married
+
+# age
+numeric_training <- training %>% select(age_median, age_under_10, age_10_to_19, age_20s, age_30s, age_40s, age_50s, age_60s, age_70s, age_over_80)
+numeric_training <- numeric_training %>% mutate(patient_id = NULL,
+                           patient_zip3 = NULL,
+                           breast_cancer_diagnosis_year = NULL)
+numeric_training <- na.omit(numeric_training)
+corrplot::corrplot(cor(numeric_training))
+
+# get rid of 
+# everything except age median and age 40s
+
+# income
+numeric_training <- training %>% select(income_household_median, income_household_under_5, income_household_5_to_10, income_household_10_to_15, income_household_15_to_20, income_household_20_to_25, income_household_25_to_35, income_household_35_to_50, income_household_50_to_75, income_household_75_to_100, income_household_100_to_150, income_household_150_over, income_household_six_figure, income_individual_median)
+numeric_training <- numeric_training %>% mutate(patient_id = NULL,
+                           patient_zip3 = NULL,
+                           breast_cancer_diagnosis_year = NULL)
+numeric_training <- na.omit(numeric_training)
+corrplot::corrplot(cor(numeric_training))
+
+# getting rid of -- all but income 75-100
+
+# housing
+numeric_training <- training %>% select(home_ownership, housing_units, home_value, rent_median, rent_burden)
+numeric_training <- numeric_training %>% mutate(patient_id = NULL,
+                           patient_zip3 = NULL,
+                           breast_cancer_diagnosis_year = NULL)
+numeric_training <- na.omit(numeric_training)
+corrplot::corrplot(cor(numeric_training))
+
+# gerting rid of housing units, rent median
+
+# education
+numeric_training <- training %>% select(education_less_highschool, education_highschool, education_some_college, education_bachelors, education_graduate, education_college_or_above, education_stem_degree, labor_force_participation, unemployment_rate)
+numeric_training <- numeric_training %>% mutate(patient_id = NULL,
+                           patient_zip3 = NULL,
+                           breast_cancer_diagnosis_year = NULL)
+numeric_training <- na.omit(numeric_training)
+corrplot::corrplot(cor(numeric_training))
+
+# getting rid of edu highschool, bachelors, graduate, college or above
+
+# race
+numeric_training <- training %>% select(race_white, race_black, race_asian, race_native, race_pacific, race_other, race_multiple)
+numeric_training <- numeric_training %>% mutate(patient_id = NULL,
+                           patient_zip3 = NULL,
+                           breast_cancer_diagnosis_year = NULL)
+numeric_training <- na.omit(numeric_training)
+corrplot::corrplot(cor(numeric_training))
+
+# other
+numeric_training <- training %>% select(hispanic, disabled, poverty, limited_english, commute_time, health_uninsured, veteran)
+numeric_training <- numeric_training %>% mutate(patient_id = NULL,
+                           patient_zip3 = NULL,
+                           breast_cancer_diagnosis_year = NULL)
+numeric_training <- na.omit(numeric_training)
+corrplot::corrplot(cor(numeric_training))
+
+# lm data
+numeric_training <- select_if(lm_training, is.numeric)
 numeric_training <- numeric_training %>% mutate(patient_id = NULL,
                            patient_zip3 = NULL,
                            breast_cancer_diagnosis_year = NULL)
@@ -511,7 +614,7 @@ ggplot(data = training, mapping = aes(x = patient_age, y = treatment_pd, color= 
 ```
 
 ## Final Visualizations
-```{r final-viz}
+```{r final-viz, eval=FALSE}
 # patient age -- pretty normal
 training %>%
   ggplot(mapping = aes(x = patient_age)) +
@@ -572,27 +675,41 @@ training %>%
 ```
 
 ```{r colinearity, eval=FALSE}
-training %>% 
-  select_all() %>%
+lm_training %>% 
+  select(-c(patient_state, patient_zip3, patient_id, treatment_pd)) %>%
+  select(pat9ient_age:density) %>%
   ggpairs()
 
 ```
 
 ```{r lin-mod, eval=FALSE}
-linear_training <- na.omit(training)
-training_lm <- train(treatment_pd ~ ., 
-                     data = linear_training,
+# lm
+training_lm1 <- train(log_treatment_pd ~ ., 
+                     data = lm_training,
                      method = "lm",
                      preProc = c("center", "scale", "YeoJohnson"))
+
+pred <- predict(training_lm1, lm_testing)
+
+# rmse
+sqrt(mean((lm_testing$log_treatment_pd - pred)^2))
+
+# forward selection
+training_lm2 <- train(log_treatment_pd ~ ., 
+                     data = lm_training,
+                     method = "leapForward",
+                     preProc = c("center", "scale", "YeoJohnson"))
+
+pred <- predict(training_lm2, lm_testing)
+
+# rmse
+sqrt(mean((lm_testing$log_treatment_pd - pred)^2))
 ```
 
 
 ```{r tree, eval=FALSE}
 # na's
-training <- training %>%
-  mutate(metastatic_first_treatment = NULL)
-testing <- testing %>% 
-  mutate(metastatic_first_treatment = NULL)
+
 #training %>%
 #  select(everything()) %>%
 #  summarise_all(funs(sum(is.na(.))))
@@ -652,7 +769,39 @@ sqrt(mean((testing$treatment_pd - pred$.pred)^2))
 ```
 
 ```{r importance-viz, eval=FALSE}
-vip(training_tree, num_features = 40, bar = FALSE)
+rf_impurity <- ranger(
+  formula = treatment_pd ~.,
+  data = training,
+  num.trees = 1500,
+  mtry = 10,
+  min.node.size = 1,
+  sample.fraction = .70,
+  replace = FALSE,
+  importance = "impurity",
+  respect.unordered.factors = "order",
+  verbose = FALSE,
+  seed = 3911
+)
+
+rf_permutation <- ranger(
+  formula = treatment_pd ~.,
+  data = training,
+  num.trees = 1500,
+  mtry = 10,
+  min.node.size = 1,
+  sample.fraction = .80,
+  replace = FALSE,
+  importance = "permutation",
+  respect.unordered.factors = "order",
+  verbose = FALSE,
+  seed = 3911
+)
+
+p1 <- vip::vip(rf_impurity, num_features = 25, bar = FALSE)
+p2 <- vip::vip(rf_permutation, num_features = 25, bar = FALSE)
+
+gridExtra::grid.arrange(p1, nrow = 1)
+gridExtra::grid.arrange(p2, nrow = 1)
 ```
 
 ```{r recipe-forest, eval=FALSE}
