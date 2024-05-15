@@ -1,4 +1,4 @@
----
+----
 title: "r-wids-datathon"
 author: "Emma Brooks"
 date: "2023-09-27"
@@ -20,11 +20,13 @@ library(workflows)
 library(parsnip)
 library(ranger)
 library(vip)
+library(robustHD)
 ```
 
 
 ```{r load-data}
-train <- read_csv("data/train.csv")
+train <- read_csv("/Users/ebrooks/Documents/thesis/project/r-wids-datathon/data/train.csv")
+final_testing <- read_csv("/Users/ebrooks/Documents/thesis/project/r-wids-datathon/data/test.csv")
 ```
 
 ```{r summary, eval=FALSE}
@@ -39,10 +41,10 @@ set.seed(3911)
 inTrain <- createDataPartition(y = train$treatment_pd, p=0.7, list=FALSE)
 training <- train[inTrain,]
 testing <- train[-inTrain,]
-training_recipe <- recipe(treatment_pd ~., data = training)
+#training_recipe <- recipe(treatment_pd ~., data = training)
 ```
 
-```{r glimpse}
+```{r glimpse, eval=FALSE}
 glimpse(training)
 
 ncol(training)
@@ -53,7 +55,7 @@ skim(training)
 # Rows = 19373
 ```
 
-```{r nas}
+```{r nas, eval=FALSE}
 training %>%
   select(everything()) %>%
   summarise_all(funs(sum(is.na(.))))
@@ -78,12 +80,11 @@ training %>%
 vis_miss(training, cluster = TRUE, warn_large_data = FALSE)
 ```
 
-```{r zero-variance-variables}
+```{r zero-variance-variables, eval=FALSE}
 caret::nearZeroVar(training, saveMetrics = TRUE) %>%
   tibble::rownames_to_column() %>%
   filter(nzv)
 ```
-
 
 ```{r count, eval=FALSE}
 training %>%
@@ -185,11 +186,11 @@ wrangle <- function(data) {
   data$breast_cancer_diagnosis_year <- as.character(data$breast_cancer_diagnosis_year)
   
   # filter for 2016-2018
-  data <- data %>% 
-    filter(breast_cancer_diagnosis_year == "2016" | breast_cancer_diagnosis_year == "2017"| 
-           breast_cancer_diagnosis_year == "2018")
+  # data <- data %>%
+  #   filter(breast_cancer_diagnosis_year == "2017"|
+  #          breast_cancer_diagnosis_year == "2018" |
+  #          breast_cancer_diagnosis_year == "2016"  )
   
-  data
   
   # side variable
   finding_side <- data %>%
@@ -208,29 +209,110 @@ wrangle <- function(data) {
     select(-c(breast_cancer_diagnosis_desc,
          breast_cancer_diagnosis_code))
   
-  # clean drug variable
-  data %>%
-    count(metastatic_first_treatment)
+  # body system variable
+  data <- data %>%
+    mutate(metastatic_cancer_body_system = case_when(
+      metastatic_cancer_diagnosis_code %in% c("C770", "C771", "C772", "C773", "C774", "C775", "C778", "C779") ~ "lymphatic",
+      metastatic_cancer_diagnosis_code %in% c("C7800", "C7801", "C7802", "C781", "C782", "C7839") ~ "respiratory",
+      metastatic_cancer_diagnosis_code %in% c("C784", "C785", "C786", "C787", "C7889") ~ "digestive",
+      metastatic_cancer_diagnosis_code %in% c("C7900", "C7901", "C7902", "C7910") ~ "urinary",
+      metastatic_cancer_diagnosis_code %in% c("C792", "C7931", "C7932", "C7940", "C7949") ~ "nervous",
+      metastatic_cancer_diagnosis_code %in% c("C7951", "C7952") ~ "skeletal",
+      metastatic_cancer_diagnosis_code %in% c("C7960", "C7961", "C7962", "C7981", "C7982") ~ "reproductive",
+      metastatic_cancer_diagnosis_code %in% c("C7970", "C7971", "C7972") ~ "adrenal glands",
+      metastatic_cancer_diagnosis_code %in% c("C7989", "C799") ~ "other",
+    ))
+  
+  data <- data %>%
+    select(-metastatic_cancer_diagnosis_code)
+  
+  data <- data %>%
+    select(-metastatic_first_treatment)
+  
+  data <- na.omit(data)
+  data$treatment_pd <- winsorize(data$treatment_pd, probs = 0.05)
+  
+  return(data)
+}
+
+training <- wrangle(training)
+testing <- wrangle(testing)
+
+#training$treatment_pd <- winsorize(training$treatment_pd, probs = c(0.05, 0.95))
+#training$treatment_pd <- winsor(training$treatment_pd, trim = 0.05)
+#testing$treatment_pd <- winsor(testing$treatment_pd, trim = 0.05)
+
+training %>%
+  ggplot(aes(x = treatment_pd)) +
+  geom_boxplot()
+
+summary(training$treatment_pd)
+
+training %>%
+  select(everything()) %>%
+  summarise_all(funs(sum(is.na(.))))
+
+quantile(training$treatment_pd, probs = c(0.05, 0.95))
+quantile(training$treatment_pd, probs = c(0.05, 0.81))
+```
+
+```{r submission-func}
+
+submission_wrangle <- function(data) {
+
+  # remove variables with too many missing values
+  data <- data %>%
+    select(-c(metastatic_first_novel_treatment,
+         metastatic_first_novel_treatment_type,
+         patient_race,
+         payer_type,
+         bmi,
+         metastatic_first_treatment_type,
+         self_employed,
+         farmer,
+         patient_gender,
+         # new
+         patient_state, division, patient_zip3,
+         male, never_married, age_under_10, age_10_to_19, age_20s, age_30s, age_50s, age_60s, age_70s, age_over_80,
+         income_household_median, income_household_under_5, income_household_5_to_10, income_household_10_to_15, income_household_15_to_20,
+            income_household_20_to_25, income_household_25_to_35, income_household_35_to_50, income_household_50_to_75,
+            income_household_100_to_150, income_household_150_over, income_household_six_figure,
+            income_individual_median,
+         housing_units, home_value,
+         # could get rid of rent median instead of home value
+         education_highschool, education_bachelors, education_graduate,
+         limited_english, # 40 variables
+         home_ownership, family_dual_income, race_other, race_multiple, disabled, # 34 variables
+         divorced, widowed, density, race_white, rent_median, married, education_less_highschool, education_some_college, age_median, # 25 variables
+         education_college_or_above, family_size, race_asian, poverty, veteran
+         ))
+  
+  # making breast cancer diagnosis year categorical
+  data$breast_cancer_diagnosis_year <- as.character(data$breast_cancer_diagnosis_year)
+  
+  # filter for 2016-2018
+  # data <- data %>%
+  #   filter(breast_cancer_diagnosis_year == "2017"|
+  #          breast_cancer_diagnosis_year == "2018" |
+  #          breast_cancer_diagnosis_year == "2016"  )
+  
+  
+  # side variable
+  finding_side <- data %>%
+    select(breast_cancer_diagnosis_desc)
+
+  finding_side <- deframe(finding_side)
 
   data <- data %>%
-    mutate(metastatic_first_treatment = case_when(
-      metastatic_first_treatment == "DOCETAXEL ANHYDROUS" ~ "DOCETAXEL",
-    
-      metastatic_first_treatment == "DOXORUBICIN HCL LIPOSOMAL" ~ "DOXORUBICIN HYDROCHLORIDE",
-      metastatic_first_treatment == "DOXORUBICIN HCL" ~ "DOXORUBICIN HYDROCHLORIDE",
-    
-      metastatic_first_treatment == "EPIRUBICIN HCL" ~ "EPIRUBICIN HYDROCHLORIDE",
-    
-      metastatic_first_treatment == "GEMCITABINE HCL" ~ "GEMCITABINE HYDROCHLORIDE",
-    
-      metastatic_first_treatment == "METHOTREXATE" ~ "METHOTREXATE SODIUM",
-    
-      metastatic_first_treatment == "PACLITAXEL PROTEIN BOUND PARTICLES" ~ "PACLITAXEL",
-    
-      metastatic_first_treatment == "PEMETREXED DISODIUM HEPTAHYDRATE" ~ "PEMETREXED DISODIUM",
-    
-      .default = metastatic_first_treatment
+    mutate(breast_cancer_diagnosis_side = case_when(
+      str_detect(finding_side, "left") ~ "left",
+      str_detect(finding_side, "right") ~ "right",
+      TRUE ~ "unspecified"
     ))
+  
+  data <- data %>%
+    select(-c(breast_cancer_diagnosis_desc,
+         breast_cancer_diagnosis_code))
   
   # body system variable
   data <- data %>%
@@ -257,36 +339,90 @@ wrangle <- function(data) {
   return(data)
 }
 
-training <- wrangle(training)
-testing <- wrangle(testing)
-
-training %>%
-  select(everything()) %>%
-  summarise_all(funs(sum(is.na(.))))
-
-training %>%
-  count(breast_cancer_diagnosis_year)
+final_testing <- submission_wrangle(final_testing)
+final_patientid <- final_testing %>% select(patient_id)
+final_testing <- final_testing %>% select(-patient_id)
 ```
 
-```{r lm-data, eval = FALSE}
+
+```{r lm-data, eval=FALSE}
 lm_wrangle <- function(data) {
   
+  # remove variables with too many missing values
   data <- data %>%
-    select(-c(male, never_married, age_under_10, age_10_to_19, age_20s, age_30s, age_50s, age_60s, age_70s, age_over_80,
-            income_household_median, income_household_under_5, income_household_10_to_15, income_household_15_to_20, 
+    select(-c(metastatic_first_novel_treatment,
+         metastatic_first_novel_treatment_type,
+         patient_race,
+         payer_type,
+         bmi,
+         metastatic_first_treatment_type,
+         self_employed,
+         farmer,
+         patient_gender,
+         # new
+         patient_id, patient_state, division, patient_zip3,
+         male, never_married, age_under_10, age_10_to_19, age_20s, age_30s, age_50s, age_60s, age_70s, age_over_80,
+         income_household_median, income_household_under_5, income_household_5_to_10, income_household_10_to_15, income_household_15_to_20,
             income_household_20_to_25, income_household_25_to_35, income_household_35_to_50, income_household_50_to_75,
             income_household_100_to_150, income_household_150_over, income_household_six_figure,
-            income_individual_median, housing_units, rent_median, education_highschool, education_bachelors, 
-            education_graduate, education_college_or_above))
+            income_individual_median,
+         housing_units, home_value,
+         # could get rid of rent median instead of home value
+         education_highschool, education_bachelors, education_graduate,
+         limited_english, # 40 variables
+         home_ownership, family_dual_income, race_other, race_multiple, disabled, # 34 variables
+         divorced, widowed, density, race_white, rent_median, married, education_less_highschool, education_some_college, age_median, # 25 variables
+         education_college_or_above, family_size, race_asian, poverty, veteran
+         ))
   
-   data <- data %>% select(-c(population, married, family_dual_income, disabled, poverty, home_ownership, limited_english, race_other,
-                                         labor_force_participation, race_asian, race_white, veteran, education_less_highschool, age_median,
-                                         income_household_5_to_10, home_value, density,
-                              family_size, unemployment_rate, education_some_college, commute_time,
-                              widowed, education_stem_degree, race_black, health_uninsured, rent_burden, race_multiple))
+  # making breast cancer diagnosis year categorical
+  data$breast_cancer_diagnosis_year <- as.character(data$breast_cancer_diagnosis_year)
+  
+  # filter for 2016-2018
+   # data <- data %>%
+   #   filter(breast_cancer_diagnosis_year == "2018" |
+   #            breast_cancer_diagnosis_year == "2017" |
+   #            breast_cancer_diagnosis_year == "2016")
+
+   # data <- data %>%
+   #  select(-breast_cancer_diagnosis_year)
+  
+  # side variable
+  finding_side <- data %>%
+    select(breast_cancer_diagnosis_desc)
+
+  finding_side <- deframe(finding_side)
+
+  data <- data %>%
+    mutate(breast_cancer_diagnosis_side = case_when(
+      str_detect(finding_side, "left") ~ "left",
+      str_detect(finding_side, "right") ~ "right",
+      TRUE ~ "unspecified"
+    ))
   
   data <- data %>%
-    select(-c(patient_zip3, patient_state, patient_id, division))
+    select(-c(breast_cancer_diagnosis_desc,
+         breast_cancer_diagnosis_code))
+  
+  # body system variable
+  data <- data %>%
+    mutate(metastatic_cancer_body_system = case_when(
+      metastatic_cancer_diagnosis_code %in% c("C770", "C771", "C772", "C773", "C774", "C775", "C778", "C779") ~ "lymphatic",
+      metastatic_cancer_diagnosis_code %in% c("C7800", "C7801", "C7802", "C781", "C782", "C7839") ~ "respiratory",
+      metastatic_cancer_diagnosis_code %in% c("C784", "C785", "C786", "C787", "C7889") ~ "digestive",
+      metastatic_cancer_diagnosis_code %in% c("C7900", "C7901", "C7902", "C7910") ~ "urinary",
+      metastatic_cancer_diagnosis_code %in% c("C792", "C7931", "C7932", "C7940", "C7949") ~ "nervous",
+      metastatic_cancer_diagnosis_code %in% c("C7951", "C7952") ~ "skeletal",
+      metastatic_cancer_diagnosis_code %in% c("C7960", "C7961", "C7962", "C7981", "C7982") ~ "reproductive",
+      metastatic_cancer_diagnosis_code %in% c("C7970", "C7971", "C7972") ~ "adrenal glands",
+      metastatic_cancer_diagnosis_code %in% c("C7989", "C799") ~ "other",
+    ))
+  
+  data <- data %>%
+    select(-metastatic_cancer_diagnosis_code)
+  
+  data <- data %>%
+    select(-metastatic_first_treatment)
   
     data <- data %>%
       mutate(log_treatment_pd = log(treatment_pd))
@@ -296,7 +432,8 @@ lm_wrangle <- function(data) {
 
     data <- data %>%
       select(-treatment_pd)
-  
+    
+  data <- na.omit(data)
   return(data)
 }
 
@@ -304,7 +441,6 @@ lm_training <- lm_wrangle(training)
 lm_testing <- lm_wrangle(testing)
 
 ```
-
 
 ```{r count2, eval=FALSE}
 training %>%
@@ -318,7 +454,6 @@ training %>%
 training %>%
   count(metastatic_first_treatment) 
 ```
-
 
 ```{r correlation-heat-map, eval=FALSE}
 numeric_training <- training %>% select(male, female, married, divorced, never_married, widowed, race_white, race_black)
@@ -416,7 +551,7 @@ numeric_training <- na.omit(numeric_training)
 corrplot::corrplot(cor(numeric_training))
 ```
 
-```{r, eval= FALSE}
+```{r, eval=FALSE}
 lm_training %>%
   select_if(is.character)
 
@@ -427,9 +562,7 @@ lm_training %>%
   count(metastatic_cancer_body_system)
 ```
 
-
-
-```{r zero-var-check}
+```{r zero-var-check, eval=FALSE}
 skim(training)
 
 caret::nearZeroVar(training, saveMetrics = TRUE) %>%
@@ -442,7 +575,17 @@ caret::nearZeroVar(training, saveMetrics = TRUE) %>%
 # treatment pd -- very right skewed
 training %>%
   ggplot(mapping = aes(x = treatment_pd)) +
-          geom_boxplot()
+          geom_boxplot() +
+  labs(title = "Distribution of Treatment Period",
+       x = "Days") +
+  theme(axis.ticks.y = element_blank(),
+        axis.text.y = element_blank())
+
+training %>%
+  ggplot(mapping = aes(x = treatment_pd)) + 
+  geom_histogram() + 
+  labs(title = "Distribution of Treatment Period",
+       x = "Days")
 
 training %>%
   filter(treatment_pd < 200) %>%
@@ -693,13 +836,12 @@ training %>%
 
 # body system by treatment pd -- filtered
 training %>%
-  #filter(treatment_pd < 1000) %>%
   ggplot(mapping = aes(y = metastatic_cancer_body_system, x = treatment_pd)) +
   geom_boxplot() +
-  labs(x = " Log Treatment Period (days)",
-       y = "Body System",
+  labs(x = "Treatment Period (days)",
+       y = "",
        title = "Distribution of Treatment Period by Metastatic Body System",
-       subtitle = "For Less than 1000 days")
+       subtitle = "Winsorized Treatment Period")
 
 # diagnosis year bar chart
 training %>%
@@ -708,17 +850,18 @@ training %>%
   labs(title = "Count of Breast Cancer Diagnoses by Year",
        x = "Year",
        y = "Number of Patients",
-       fill = "Side")
+       fill = "Side",
+       subtitle = "Colored by Breast Diagnosis Side")
 
 # boxplot - year by treatment period
 training %>%
-  filter(treatment_pd < 1000) %>%
   ggplot(aes(x = treatment_pd, y = breast_cancer_diagnosis_year)) +
   geom_boxplot() +
-  labs(x = "Days",
-       y = "Year",
+  labs(x = " Treatment Period (Days)",
+       y = "",
        title = "Treatment Period by Diagnosis Year",
-       subtitle = "Less than 1000 days for treatment period")
+       subtitle = "Winsorized Treatment Period")
+
 
 # diagnosis year with metastatic body system
 training %>%
@@ -739,8 +882,6 @@ lm_training %>%
 ```
 
 ```{r lin-mod, eval=FALSE}
-
-
 # lm
 training_lm1 <- train(log_treatment_pd ~ ., 
                      data = lm_training,
@@ -797,8 +938,33 @@ pred <- predict(slm1, lm_testing)
 y <- exp(lm_testing$log_treatment_pd)
 y.pred <- exp(pred)
 sqrt(mean((y - y.pred)^2))
-```
 
+slm1 %>%
+  tidy() %>%
+  select(term, estimate) %>%
+  mutate(estimate_exp = exp(estimate))
+
+# Step:  AIC=12028.55
+# log_treatment_pd ~ patient_age + breast_cancer_diagnosis_year + 
+#     region + income_household_75_to_100 + rent_burden + labor_force_participation + 
+#     race_black + hispanic + commute_time + health_uninsured + 
+#     breast_cancer_diagnosis_side + metastatic_cancer_body_system
+
+# RMSE = 111.5587
+
+# 2017-2018
+# Step:  AIC=7676.92
+# log_treatment_pd ~ patient_age + breast_cancer_diagnosis_year + 
+#     region + income_household_75_to_100 + rent_burden + labor_force_participation + 
+#     race_black + hispanic + health_uninsured + metastatic_cancer_body_system
+# RMSE = 83.2735
+
+# 2018
+# Step:  AIC=3139.39
+# log_treatment_pd ~ patient_age + population + female + race_black + 
+#     hispanic + health_uninsured + metastatic_cancer_body_system
+# RMSE =  53.57248
+```
 
 ```{r tree, eval=FALSE}
 # na's
@@ -807,20 +973,20 @@ sqrt(mean((y - y.pred)^2))
 #  summarise_all(funs(sum(is.na(.))))
 
 
-# 10 fold cv by default
-training_tree <- rpart(
-  formula = treatment_pd ~.,
-  data = training,
-  preProc = c("center", "scale", "YeoJohnson"),
-  method = "anova" # anova bc of regression tree (HoML DT)
-)
-rpart.plot(training_tree)
+# # 10 fold cv by default
+# training_tree <- rpart(
+#   formula = treatment_pd ~.,
+#   data = training,
+#   preProc = c("center", "scale", "YeoJohnson"),
+#   method = "anova" # anova bc of regression tree (HoML DT)
+# )
+# rpart.plot(training_tree)
 
 # caret way
 training_tree2 <- train(treatment_pd ~.,
                         data = training,
                         method = "rpart",
-                        preProc = c("center", "scale", "YeoJohnson"),
+                        preProc = c("center", "scale"),
                         metric = "RMSE")
 
 pred <- predict(training_tree2, testing)
@@ -847,7 +1013,7 @@ sqrt(mean((testing$treatment_pd - pred)^2))
 # rand forest ranger tree
 tf_mod <- rand_forest(
             mtry = 2,
-            trees = 900
+            trees = 500
           )
 
 training_forest2 <- tf_mod %>%
@@ -859,13 +1025,33 @@ pred <- predict(training_forest2, testing)
 
 sqrt(mean((testing$treatment_pd - pred$.pred)^2))
 
+# submission forest
+tf_mod <- rand_forest(
+            mtry = 2,
+            trees = 900
+          )
+
+training_forest2 <- tf_mod %>%
+                    set_engine("ranger") %>%
+                    set_mode("regression") %>%
+                    fit(treatment_pd ~ ., training)
+
+final_pred <- predict(training_forest2, final_testing)
+final_testing$patient_id <- final_patientid
+final_testing$treatment_pd <- final_pred
+
+final_testing <- final_testing %>% select(treatment_pd, patient_id)
+write.csv(final_testing, "/Users/ebrooks/Documents/thesis/project/r-wids-datathon/data/submission.csv")
+
+#sqrt(mean((testing$treatment_pd - pred$.pred)^2))
+
 ```
 
 ```{r importance-viz, eval=FALSE}
 rf_impurity <- ranger(
   formula = treatment_pd ~.,
   data = training,
-  num.trees = 900,
+  num.trees = 500,
   mtry = 2,
   min.node.size = 1,
   sample.fraction = .70,
@@ -879,7 +1065,7 @@ rf_impurity <- ranger(
 rf_permutation <- ranger(
   formula = treatment_pd ~.,
   data = training,
-  num.trees = 900,
+  num.trees = 500,
   mtry = 2,
   min.node.size = 1,
   sample.fraction = .70,
@@ -890,8 +1076,8 @@ rf_permutation <- ranger(
   seed = 3911
 )
 
-p1 <- vip::vip(rf_impurity, num_features = 25, bar = FALSE)
-p2 <- vip::vip(rf_permutation, num_features = 40, bar = FALSE)
+p1 <- vip::vip(rf_impurity, num_features = 5, bar = FALSE)
+p2 <- vip::vip(rf_permutation, num_features = 5, bar = FALSE)
 
 gridExtra::grid.arrange(p1, nrow = 1)
 gridExtra::grid.arrange(p2, nrow = 1)
