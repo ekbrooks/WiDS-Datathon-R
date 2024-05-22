@@ -34,6 +34,7 @@ ncol(train)
 nrow(train)
 colnames(train)
 skim(train)
+summary(final_testing)
 ```
 
 ```{r set-seed}
@@ -232,6 +233,11 @@ wrangle <- function(data) {
   data <- na.omit(data)
   data$treatment_pd <- winsorize(data$treatment_pd, probs = 0.05)
   
+  data$breast_cancer_diagnosis_year <- as.factor(data$breast_cancer_diagnosis_year)
+  data$breast_cancer_diagnosis_side <- as.factor(data$breast_cancer_diagnosis_side)
+  data$region <- as.factor(data$region)
+  data$metastatic_cancer_body_system <- as.factor(data$metastatic_cancer_body_system)
+
   return(data)
 }
 
@@ -333,8 +339,14 @@ submission_wrangle <- function(data) {
   
   data <- data %>%
     select(-metastatic_first_treatment)
+    
+  data$breast_cancer_diagnosis_year <- as.factor(data$breast_cancer_diagnosis_year)
+  data$breast_cancer_diagnosis_side <- as.factor(data$breast_cancer_diagnosis_side)
+  data$region <- as.factor(data$region)
+  data$metastatic_cancer_body_system <- as.factor(data$metastatic_cancer_body_system)
+
   
-  data <- na.omit(data)
+  #data <- na.omit(data)
   
   return(data)
 }
@@ -342,6 +354,10 @@ submission_wrangle <- function(data) {
 final_testing <- submission_wrangle(final_testing)
 final_patientid <- final_testing %>% select(patient_id)
 final_testing <- final_testing %>% select(-patient_id)
+
+final_testing %>%
+  select(everything()) %>%
+  summarise_all(funs(sum(is.na(.))))
 ```
 
 
@@ -1025,24 +1041,26 @@ pred <- predict(training_forest2, testing)
 
 sqrt(mean((testing$treatment_pd - pred$.pred)^2))
 
+
 # submission forest
-tf_mod <- rand_forest(
-            mtry = 2,
-            trees = 900
-          )
 
-training_forest2 <- tf_mod %>%
-                    set_engine("ranger") %>%
-                    set_mode("regression") %>%
-                    fit(treatment_pd ~ ., training)
+final_testing_imputed <- na.roughfix(final_testing)
+final_testing_imputed %>%
+  select(everything()) %>%
+  summarise_all(funs(sum(is.na(.))))
 
-final_pred <- predict(training_forest2, final_testing)
-final_testing$patient_id <- final_patientid
-final_testing$treatment_pd <- final_pred
+submission_forest <- randomForest(treatment_pd ~., training, ntree = 500, mtry = 2)
+final_pred <- predict(submission_forest, final_testing_imputed)
+summary(final_pred)
 
-final_testing <- final_testing %>% select(treatment_pd, patient_id)
-write.csv(final_testing, "/Users/ebrooks/Documents/thesis/project/r-wids-datathon/data/submission.csv")
+final_testing <- bind_cols(final_patientid, final_pred)
+colnames(final_testing)[2] <- "treatment_pd"
+final_testing %>%
+  select(everything()) %>%
+  summarise_all(funs(sum(is.na(.))))
 
+write_csv(final_testing, "/Users/ebrooks/Documents/thesis/project/r-wids-datathon/data/submission.csv")
+read_csv("/Users/ebrooks/Documents/thesis/project/r-wids-datathon/data/submission.csv")
 #sqrt(mean((testing$treatment_pd - pred$.pred)^2))
 
 ```

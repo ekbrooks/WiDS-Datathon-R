@@ -397,7 +397,8 @@ display: none;
 <pre class="r"><code>ncol(train)
 nrow(train)
 colnames(train)
-skim(train)</code></pre>
+skim(train)
+summary(final_testing)</code></pre>
 <pre class="r"><code>set.seed(3911)
 inTrain &lt;- createDataPartition(y = train$treatment_pd, p=0.7, list=FALSE)
 training &lt;- train[inTrain,]
@@ -578,6 +579,11 @@ training %&gt;%
   data &lt;- na.omit(data)
   data$treatment_pd &lt;- winsorize(data$treatment_pd, probs = 0.05)
   
+  data$breast_cancer_diagnosis_year &lt;- as.factor(data$breast_cancer_diagnosis_year)
+  data$breast_cancer_diagnosis_side &lt;- as.factor(data$breast_cancer_diagnosis_side)
+  data$region &lt;- as.factor(data$region)
+  data$metastatic_cancer_body_system &lt;- as.factor(data$metastatic_cancer_body_system)
+
   return(data)
 }
 
@@ -699,15 +705,45 @@ training %&gt;%
   
   data &lt;- data %&gt;%
     select(-metastatic_first_treatment)
+    
+  data$breast_cancer_diagnosis_year &lt;- as.factor(data$breast_cancer_diagnosis_year)
+  data$breast_cancer_diagnosis_side &lt;- as.factor(data$breast_cancer_diagnosis_side)
+  data$region &lt;- as.factor(data$region)
+  data$metastatic_cancer_body_system &lt;- as.factor(data$metastatic_cancer_body_system)
+
   
-  data &lt;- na.omit(data)
+  #data &lt;- na.omit(data)
   
   return(data)
 }
 
 final_testing &lt;- submission_wrangle(final_testing)
 final_patientid &lt;- final_testing %&gt;% select(patient_id)
-final_testing &lt;- final_testing %&gt;% select(-patient_id)</code></pre>
+final_testing &lt;- final_testing %&gt;% select(-patient_id)
+
+final_testing %&gt;%
+  select(everything()) %&gt;%
+  summarise_all(funs(sum(is.na(.))))</code></pre>
+<pre><code>## Warning: `funs()` was deprecated in dplyr 0.8.0.
+## ℹ Please use a list of either functions or lambdas:
+## 
+## # Simple named list: list(mean = mean, median = median)
+## 
+## # Auto named with `tibble::lst()`: tibble::lst(mean, median)
+## 
+## # Using lambdas list(~ mean(., trim = .2), ~ median(., na.rm = TRUE))
+## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+## generated.</code></pre>
+<pre><code>## # A tibble: 1 × 19
+##   patient_age breast_cancer_diagnosis_year region population age_40s female
+##         &lt;int&gt;                        &lt;int&gt;  &lt;int&gt;      &lt;int&gt;   &lt;int&gt;  &lt;int&gt;
+## 1           0                            0     93          0       0      0
+## # ℹ 13 more variables: income_household_75_to_100 &lt;int&gt;, rent_burden &lt;int&gt;,
+## #   education_stem_degree &lt;int&gt;, labor_force_participation &lt;int&gt;,
+## #   unemployment_rate &lt;int&gt;, race_black &lt;int&gt;, race_native &lt;int&gt;,
+## #   race_pacific &lt;int&gt;, hispanic &lt;int&gt;, commute_time &lt;int&gt;,
+## #   health_uninsured &lt;int&gt;, breast_cancer_diagnosis_side &lt;int&gt;,
+## #   metastatic_cancer_body_system &lt;int&gt;</code></pre>
 <pre class="r"><code>lm_wrangle &lt;- function(data) {
   
   # remove variables with too many missing values
@@ -1343,24 +1379,26 @@ pred &lt;- predict(training_forest2, testing)
 
 sqrt(mean((testing$treatment_pd - pred$.pred)^2))
 
+
 # submission forest
-tf_mod &lt;- rand_forest(
-            mtry = 2,
-            trees = 900
-          )
 
-training_forest2 &lt;- tf_mod %&gt;%
-                    set_engine(&quot;ranger&quot;) %&gt;%
-                    set_mode(&quot;regression&quot;) %&gt;%
-                    fit(treatment_pd ~ ., training)
+final_testing_imputed &lt;- na.roughfix(final_testing)
+final_testing_imputed %&gt;%
+  select(everything()) %&gt;%
+  summarise_all(funs(sum(is.na(.))))
 
-final_pred &lt;- predict(training_forest2, final_testing)
-final_testing$patient_id &lt;- final_patientid
-final_testing$treatment_pd &lt;- final_pred
+submission_forest &lt;- randomForest(treatment_pd ~., training, ntree = 500, mtry = 2)
+final_pred &lt;- predict(submission_forest, final_testing_imputed)
+summary(final_pred)
 
-final_testing &lt;- final_testing %&gt;% select(treatment_pd, patient_id)
-write.csv(final_testing, &quot;/Users/ebrooks/Documents/thesis/project/r-wids-datathon/data/submission.csv&quot;)
+final_testing &lt;- bind_cols(final_patientid, final_pred)
+colnames(final_testing)[2] &lt;- &quot;treatment_pd&quot;
+final_testing %&gt;%
+  select(everything()) %&gt;%
+  summarise_all(funs(sum(is.na(.))))
 
+write_csv(final_testing, &quot;/Users/ebrooks/Documents/thesis/project/r-wids-datathon/data/submission.csv&quot;)
+read_csv(&quot;/Users/ebrooks/Documents/thesis/project/r-wids-datathon/data/submission.csv&quot;)
 #sqrt(mean((testing$treatment_pd - pred$.pred)^2))</code></pre>
 <pre class="r"><code>rf_impurity &lt;- ranger(
   formula = treatment_pd ~.,
