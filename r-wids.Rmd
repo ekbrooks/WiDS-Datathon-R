@@ -38,10 +38,10 @@ summary(final_testing)
 ```
 
 ```{r set-seed}
-set.seed(3911)
-inTrain <- createDataPartition(y = train$treatment_pd, p=0.7, list=FALSE)
-training <- train[inTrain,]
-testing <- train[-inTrain,]
+# set.seed(3911)
+# inTrain <- createDataPartition(y = train$treatment_pd, p=0.7, list=FALSE)
+# training <- train[inTrain,]
+# testing <- train[-inTrain,]
 #training_recipe <- recipe(treatment_pd ~., data = training)
 ```
 
@@ -230,7 +230,7 @@ wrangle <- function(data) {
   data <- data %>%
     select(-metastatic_first_treatment)
   
-  data <- na.omit(data)
+  #data <- na.omit(data)
   data$treatment_pd <- winsorize(data$treatment_pd, probs = 0.05)
   
   data$breast_cancer_diagnosis_year <- as.factor(data$breast_cancer_diagnosis_year)
@@ -241,31 +241,30 @@ wrangle <- function(data) {
   return(data)
 }
 
-training <- wrangle(training)
-testing <- wrangle(testing)
+train <- wrangle(train)
+
+# splitting 
+set.seed(3911)
+inTrain <- createDataPartition(y = train$treatment_pd, p=0.7, list=FALSE)
+training <- train[inTrain,]
+testing <- train[-inTrain,]
+
+#training <- wrangle(training)
+#testing <- wrangle(testing)
+
+# imputing
+training <- na.roughfix(training)
+testing <- na.roughfix(testing)
 
 #training$treatment_pd <- winsorize(training$treatment_pd, probs = c(0.05, 0.95))
 #training$treatment_pd <- winsor(training$treatment_pd, trim = 0.05)
 #testing$treatment_pd <- winsor(testing$treatment_pd, trim = 0.05)
 
-training %>%
-  ggplot(aes(x = treatment_pd)) +
-  geom_boxplot()
-
-summary(training$treatment_pd)
-
-training %>%
-  select(everything()) %>%
-  summarise_all(funs(sum(is.na(.))))
-
-quantile(training$treatment_pd, probs = c(0.05, 0.95))
-quantile(training$treatment_pd, probs = c(0.05, 0.81))
 ```
 
-```{r submission-func}
-
+```{r submission-wrangle}
 submission_wrangle <- function(data) {
-
+  
   # remove variables with too many missing values
   data <- data %>%
     select(-c(metastatic_first_novel_treatment,
@@ -295,13 +294,6 @@ submission_wrangle <- function(data) {
   
   # making breast cancer diagnosis year categorical
   data$breast_cancer_diagnosis_year <- as.character(data$breast_cancer_diagnosis_year)
-  
-  # filter for 2016-2018
-  # data <- data %>%
-  #   filter(breast_cancer_diagnosis_year == "2017"|
-  #          breast_cancer_diagnosis_year == "2018" |
-  #          breast_cancer_diagnosis_year == "2016"  )
-  
   
   # side variable
   finding_side <- data %>%
@@ -339,27 +331,38 @@ submission_wrangle <- function(data) {
   
   data <- data %>%
     select(-metastatic_first_treatment)
-    
+  
   data$breast_cancer_diagnosis_year <- as.factor(data$breast_cancer_diagnosis_year)
   data$breast_cancer_diagnosis_side <- as.factor(data$breast_cancer_diagnosis_side)
   data$region <- as.factor(data$region)
   data$metastatic_cancer_body_system <- as.factor(data$metastatic_cancer_body_system)
 
-  
-  #data <- na.omit(data)
-  
   return(data)
 }
 
+# for submission
 final_testing <- submission_wrangle(final_testing)
 final_patientid <- final_testing %>% select(patient_id)
 final_testing <- final_testing %>% select(-patient_id)
 
-final_testing %>%
-  select(everything()) %>%
-  summarise_all(funs(sum(is.na(.))))
+# impute
+final_testing <- na.roughfix(final_testing)
 ```
 
+```{check, eval = FALSE}
+training %>%
+  ggplot(aes(x = treatment_pd)) +
+  geom_boxplot()
+
+summary(training$treatment_pd)
+
+training %>%
+  select(everything()) %>%
+  summarise_all(funs(sum(is.na(.))))
+
+quantile(training$treatment_pd, probs = c(0.05, 0.95))
+quantile(training$treatment_pd, probs = c(0.05, 0.81))
+```
 
 ```{r lm-data, eval=FALSE}
 lm_wrangle <- function(data) {
@@ -1029,7 +1032,7 @@ sqrt(mean((testing$treatment_pd - pred)^2))
 # rand forest ranger tree
 tf_mod <- rand_forest(
             mtry = 2,
-            trees = 500
+            trees = 5000
           )
 
 training_forest2 <- tf_mod %>%
@@ -1041,16 +1044,25 @@ pred <- predict(training_forest2, testing)
 
 sqrt(mean((testing$treatment_pd - pred$.pred)^2))
 
+# testing for submission
 
-# submission forest
+test_forest <- randomForest(treatment_pd ~., training, ntree = 1200, mtry = 2)
+test_pred <- predict(test_forest, testing)
+sqrt(mean((testing$treatment_pd - test_pred)^2))
+summary(test_pred)
 
-final_testing_imputed <- na.roughfix(final_testing)
-final_testing_imputed %>%
+test_testing <- bind_cols(test_patientid, test_pred)
+colnames(test_testing)[2] <- "treatment_pd"
+test_testing %>%
   select(everything()) %>%
   summarise_all(funs(sum(is.na(.))))
 
-submission_forest <- randomForest(treatment_pd ~., training, ntree = 500, mtry = 2)
-final_pred <- predict(submission_forest, final_testing_imputed)
+```
+
+```{r submission-forest}
+# submission forest
+submission_forest <- randomForest(treatment_pd ~., training, ntree = 1200, mtry = 2)
+final_pred <- predict(submission_forest, final_testing)
 summary(final_pred)
 
 final_testing <- bind_cols(final_patientid, final_pred)
@@ -1061,8 +1073,6 @@ final_testing %>%
 
 write_csv(final_testing, "/Users/ebrooks/Documents/thesis/project/r-wids-datathon/data/submission.csv")
 read_csv("/Users/ebrooks/Documents/thesis/project/r-wids-datathon/data/submission.csv")
-#sqrt(mean((testing$treatment_pd - pred$.pred)^2))
-
 ```
 
 ```{r importance-viz, eval=FALSE}
